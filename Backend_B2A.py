@@ -97,6 +97,26 @@ def get_patient_medication(patient_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/patients/<int:patient_id>/diagnosis', methods=['GET'])
+def get_patient_diagnosis(patient_id):
+    try:
+        cur = mysql.connection.cursor()
+        query = "SELECT * FROM Diagnosis WHERE PatientId = %s"
+        cur.execute(query, (patient_id,))
+        diagnoses = cur.fetchall()
+
+        if not diagnoses:
+            return jsonify({"error": "No diagnoses found for this patient"}), 404
+
+        column_names = [desc[0] for desc in cur.description]
+        cur.close()
+
+        diagnoses_list = [dict(zip(column_names, row)) for row in diagnoses]
+
+        return jsonify(diagnoses_list)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 if __name__ == '__main__':  # Uitvoeren
     app.run(debug=True)
