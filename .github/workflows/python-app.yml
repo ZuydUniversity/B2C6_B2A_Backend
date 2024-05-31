@@ -3,7 +3,7 @@ name: Build & Deploy
 on: 
   push: 
     branches: 
-      - main
+      - Youneselajjouri-patch-1
 
 jobs: 
   build-deploy:
