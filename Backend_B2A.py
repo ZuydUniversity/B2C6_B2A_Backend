@@ -31,7 +31,7 @@ def serialize_data(data):
         # Return data as is if it's not bytes
         return data
 
-@app.route('/user', methods=['GET'])
+@app.route('/get_doctors', methods=['GET'])
 def get_doctors():
     try:
         cur = mysql.connection.cursor()
@@ -50,6 +50,29 @@ def get_doctors():
         serialized_doctors = serialize_data(doctors_list)
 
         return jsonify(serialized_doctors)
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+@app.route('/get_patients', methods=['GET'])
+def get_patients():
+    try:
+        cur = mysql.connection.cursor()
+        cur.execute("SELECT * FROM User WHERE Role = '2'")
+        doctors = cur.fetchall()
+        column_names = [desc[0] for desc in cur.description] if cur.description else []
+        cur.close()
+        
+        if not doctors:
+            return jsonify({"error": "No patients found"}), 404
+
+        # Convert the result to a list of dictionaries
+        patients_list = [dict(zip(column_names, row)) for row in doctors]
+
+        # Serialize data to handle binary fields
+        serialized_patients = serialize_data(patients_list)
+
+        return jsonify(serialized_patients)
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
