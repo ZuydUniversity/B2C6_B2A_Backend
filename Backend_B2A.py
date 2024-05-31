@@ -1,6 +1,7 @@
 from flask import Flask, jsonify, request
 from flask_mysqldb import MySQL
 from flask_cors import CORS
+import base64
 
 app = Flask(__name__)  # Initialiseren
 CORS(app)
@@ -16,13 +17,42 @@ mysql = MySQL(app)
 def welcome():
     return "WELKOM"
 
-@app.route('/doctors', methods=['GET'])  # Dit werkt als endpoint van API.
+def serialize_data(data):
+    if isinstance(data, bytes):
+        # Convert bytes to base64-encoded string
+        return base64.b64encode(data).decode('utf-8')
+    elif isinstance(data, dict):
+        # Recursively process dictionary values
+        return {k: serialize_data(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        # Recursively process list elements
+        return [serialize_data(item) for item in data]
+    else:
+        # Return data as is if it's not bytes
+        return data
+
+@app.route('/user', methods=['GET'])
 def get_doctors():
-    cur = mysql.connection.cursor()
-    cur.execute("SELECT * FROM doctor")
-    doctors = cur.fetchall()
-    cur.close()
-    return jsonify(doctors)
+    try:
+        cur = mysql.connection.cursor()
+        cur.execute("SELECT * FROM User WHERE Role = '1'")
+        doctors = cur.fetchall()
+        column_names = [desc[0] for desc in cur.description] if cur.description else []
+        cur.close()
+        
+        if not doctors:
+            return jsonify({"error": "No doctors found"}), 404
+
+        # Convert the result to a list of dictionaries
+        doctors_list = [dict(zip(column_names, row)) for row in doctors]
+
+        # Serialize data to handle binary fields
+        serialized_doctors = serialize_data(doctors_list)
+
+        return jsonify(serialized_doctors)
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/doctors/<int:doctor_id>', methods=['GET'])
 def get_doctor(doctor_id):
