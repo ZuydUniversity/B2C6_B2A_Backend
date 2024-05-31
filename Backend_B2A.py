@@ -59,15 +59,15 @@ def get_patients():
     try:
         cur = mysql.connection.cursor()
         cur.execute("SELECT * FROM User WHERE Role = '2'")
-        doctors = cur.fetchall()
+        patients = cur.fetchall()
         column_names = [desc[0] for desc in cur.description] if cur.description else []
         cur.close()
         
-        if not doctors:
+        if not patients:
             return jsonify({"error": "No patients found"}), 404
 
         # Convert the result to a list of dictionaries
-        patients_list = [dict(zip(column_names, row)) for row in doctors]
+        patients_list = [dict(zip(column_names, row)) for row in patients]
 
         # Serialize data to handle binary fields
         serialized_patients = serialize_data(patients_list)
@@ -77,13 +77,26 @@ def get_patients():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/doctors/<int:doctor_id>', methods=['GET'])
-def get_doctor(doctor_id):
-    cur = mysql.connection.cursor()
-    cur.execute("SELECT * FROM doctor WHERE id=%s", (doctor_id,))
-    doctor = cur.fetchone()
-    cur.close()
-    return jsonify(doctor)
+@app.route('/patients/<int:patient_id>/medication', methods=['GET'])
+def get_patient_medication(patient_id):
+    try:
+        cur = mysql.connection.cursor()
+        query = "SELECT * FROM Medication WHERE PatientId = %s"
+        cur.execute(query, (patient_id,))
+        medications = cur.fetchall()
+
+        if not medications:
+            return jsonify({"error": "No medications found for this patient"}), 404
+
+        column_names = [desc[0] for desc in cur.description]
+        cur.close()
+
+        medications_list = [dict(zip(column_names, row)) for row in medications]
+
+        return jsonify(medications_list)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 if __name__ == '__main__':  # Uitvoeren
     app.run(debug=True)
