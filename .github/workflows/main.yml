@@ -1,0 +1,39 @@
+name: Build & Deploy
+
+on: 
+  push: 
+    branches: 
+      - main
+
+jobs: 
+  build-deploy:
+    name: Build and Deploy Python Project
+    runs-on: ubuntu-latest 
+    steps: 
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+         
+      - name: Unit Tests 
+        run: |
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi 
+          pytest
+
+      - name: Build the application
+        run: |
+          # Add any build steps here if necessary
+          echo "Build step for Python application"
+
+      - name: Deploy the application
+        run: |
+          # Add your deploy steps here
+          echo "Deploy step for Python application"
