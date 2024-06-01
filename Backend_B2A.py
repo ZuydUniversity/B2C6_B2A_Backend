@@ -85,6 +85,10 @@ def get_doctor(doctor_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
+# RESEARCHER FUNCTIONS
+
+
+    
 # PATIENT FUNCTIONS
 
 # gets all patients
@@ -250,8 +254,61 @@ def get_patient_test_results(patient_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
+# Get a specific test result belonging to a patient
+@app.route('/patients/<int:patient_id>/test_results/<int:test_result_id>', methods=['GET'])
+def get_patient_test_result(patient_id, test_result_id):
+    try:
+        cur = mysql.connection.cursor()
+        query = "SELECT * FROM TestResults WHERE PatientId = %s AND Id = %s"
+        cur.execute(query, (patient_id, test_result_id))
+        test_result = cur.fetchone()
+        cur.close()
+
+        if not test_result:
+            return jsonify({"message": "Test result not found"})
+
+        column_names = [desc[0] for desc in cur.description]
+        test_result_dict = dict(zip(column_names, test_result))
+
+        return jsonify(test_result_dict)
+    except Exception as e:
+        return jsonify({"message": "An error occurred"})
+
+# Delete a test result
+@app.route('/delete_test_result/<int:test_result_id>', methods=['DELETE'])
+def delete_test_result(test_result_id):
+    try:
+        # Check if the test result exists
+        cur = mysql.connection.cursor()
+        query = "SELECT * FROM TestResults WHERE Id = %s"
+        cur.execute(query, (test_result_id,))
+        test_result = cur.fetchone()
+        cur.close()
+
+        if not test_result:
+            return jsonify({"message": "Test result not found"})
+
+        # Delete the test result
+        cur = mysql.connection.cursor()
+        query = "DELETE FROM TestResults WHERE Id = %s"
+        cur.execute(query, (test_result_id,))
+        mysql.connection.commit()
+        cur.close()
+
+        # Delete any attached notes
+        cur = mysql.connection.cursor()
+        query = "DELETE FROM Notes WHERE TestResultId = %s"
+        cur.execute(query, (test_result_id,))
+        mysql.connection.commit()
+        cur.close()
+
+        return jsonify({"message": "Test result deleted successfully"})
+
+    except Exception as e:
+        return jsonify({"message": "An error occurred"})
+
 # Add a note for a specific patient's test result
-@app.route('/add_note/<int:patient_id>/<int:test_result_id>', methods=['POST'])
+@app.route('/patient/<int:patient_id>/test_result/<int:test_result_id>/note', methods=['POST'])
 def add_note(patient_id, test_result_id):
     try:
         # Get the note from the request body
@@ -310,6 +367,81 @@ def get_test_result_notes(test_result_id):
     except Exception as e:
         return jsonify({"message": "An error occurred"})
     
+# Delete a note for a specific patient's test result
+@app.route('/patient/<int:patient_id>/test_result/<int:test_result_id>/note', methods=['DELETE'])
+def delete_note(patient_id, test_result_id):
+    try:
+        # Check if the patient exists
+        cur = mysql.connection.cursor()
+        query = "SELECT * FROM User WHERE Id = %s AND Role = '2'"
+        cur.execute(query, (patient_id,))
+        patient = cur.fetchone()
+        cur.close()
+
+        if not patient:
+            return jsonify({"message": "Patient not found"})
+
+        # Check if the test result exists
+        cur = mysql.connection.cursor()
+        query = "SELECT * FROM TestResults WHERE Id = %s AND PatientId = %s"
+        cur.execute(query, (test_result_id, patient_id))
+        test_result = cur.fetchone()
+        cur.close()
+
+        if not test_result:
+            return jsonify({"message": "Test result not found"})
+
+        # Delete the note for the test result
+        cur = mysql.connection.cursor()
+        query = "UPDATE TestResults SET Note = NULL WHERE Id = %s"
+        cur.execute(query, (test_result_id,))
+        mysql.connection.commit()
+        cur.close()
+
+        return jsonify({"message": "Note deleted successfully"})
+
+    except Exception as e:
+        return jsonify({"message": "An error occurred"})
+    
+# Edit a note for a specific patient's test result
+@app.route('/patient/<int:patient_id>/test_result/<int:test_result_id>/note', methods=['PUT'])
+def edit_note(patient_id, test_result_id):
+    try:
+        # Get the updated note from the request body
+        updated_note = request.get_json()['note']
+
+        # Check if the patient exists
+        cur = mysql.connection.cursor()
+        query = "SELECT * FROM User WHERE Id = %s AND Role = '2'"
+        cur.execute(query, (patient_id,))
+        patient = cur.fetchone()
+        cur.close()
+
+        if not patient:
+            return jsonify({"message": "Patient not found"})
+
+        # Check if the test result exists
+        cur = mysql.connection.cursor()
+        query = "SELECT * FROM TestResults WHERE Id = %s AND PatientId = %s"
+        cur.execute(query, (test_result_id, patient_id))
+        test_result = cur.fetchone()
+        cur.close()
+
+        if not test_result:
+            return jsonify({"message": "Test result not found"})
+
+        # Update the note for the test result
+        cur = mysql.connection.cursor()
+        query = "UPDATE TestResults SET Note = %s WHERE Id = %s"
+        cur.execute(query, (updated_note, test_result_id))
+        mysql.connection.commit()
+        cur.close()
+
+        return jsonify({"message": "Note updated successfully"})
+
+    except Exception as e:
+        return jsonify({"message": "An error occurred"})
+
 # Get a patient's appointments
 @app.route('/patients/<int:patient_id>/appointments', methods=['GET'])
 def get_patient_appointments(patient_id):
@@ -351,8 +483,67 @@ def get_patient_exercises(patient_id):
         return jsonify(exercises_list)
     except Exception as e:
         return
+    
+# Get a patient's research results
+@app.route('/patients/<int:patient_id>/research_results', methods=['GET'])
+def get_patient_research_results(patient_id):
+    try:
+        cur = mysql.connection.cursor()
+        query = "SELECT * FROM ResearchResults WHERE PatientId = %s"
+        cur.execute(query, (patient_id,))
+        research_results = cur.fetchall()
 
-# Function to generate a PDF of a specific patient's data (Needs testing and probably some adjustments)
+        if not research_results:
+            return jsonify({"message": "No research results found for the patient"})
+
+        column_names = [desc[0] for desc in cur.description]
+        cur.close()
+
+        research_results_list = [dict(zip(column_names, row)) for row in research_results]
+
+        return jsonify(research_results_list)
+    except Exception as e:
+        return jsonify({"message": "An error occurred"})
+    
+# Get a specific research result belonging to a patient
+@app.route('/patients/<int:patient_id>/research_results/<int:result_id>', methods=['GET'])
+def get_patient_research_result(patient_id, result_id):
+    try:
+        cur = mysql.connection.cursor()
+        query = "SELECT * FROM ResearchResults WHERE PatientId = %s AND Id = %s"
+        cur.execute(query, (patient_id, result_id))
+        research_result = cur.fetchone()
+
+        if not research_result:
+            return jsonify({"message": "Research result not found"})
+
+        column_names = [desc[0] for desc in cur.description]
+        cur.close()
+
+        research_result_dict = dict(zip(column_names, research_result))
+
+        return jsonify(research_result_dict)
+    except Exception as e:
+        return jsonify({"message": "An error occurred"})
+    
+# Delete a research result
+@app.route('/delete_research_result/<int:result_id>', methods=['DELETE'])
+def delete_research_result(result_id):
+    try:
+        cur = mysql.connection.cursor()
+        query = "DELETE FROM ResearchResults WHERE Id = %s"
+        cur.execute(query, (result_id,))
+        mysql.connection.commit()
+        cur.close()
+
+        return jsonify({"message": "Research result deleted successfully"})
+
+    except Exception as e:
+        return jsonify({"message": "An error occurred"})
+    
+# DOWNLOAD FUNCTIONS (PDF) (GONNA NEED SOME SERIOUS TESTING and probably some adjustments to the layout of the pdf)
+
+# Function to generate a PDF of a specific patient's data
 @app.route('/download_patient_pdf/<int:patient_id>', methods=['GET'])
 def download_patient_pdf(patient_id):
     try:
@@ -390,6 +581,119 @@ def download_patient_pdf(patient_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+# Function to generate a PDF of a specific test result belonging to a patient
+@app.route('/download_test_result_pdf/<int:patient_id>/<int:test_result_id>', methods=['GET'])
+def download_test_result_pdf(patient_id, test_result_id):
+    try:
+        # Check if the patient exists
+        cur = mysql.connection.cursor()
+        query = "SELECT * FROM User WHERE Id = %s AND Role = '2'"
+        cur.execute(query, (patient_id,))
+        patient = cur.fetchone()
+        column_names = [desc[0] for desc in cur.description] if cur.description else []
+        cur.close()
+
+        if not patient:
+            return jsonify({"message": "Patient not found"})
+
+        # Check if the test result exists
+        cur = mysql.connection.cursor()
+        query = "SELECT * FROM TestResults WHERE Id = %s AND PatientId = %s"
+        cur.execute(query, (test_result_id, patient_id))
+        test_result = cur.fetchone()
+        column_names = [desc[0] for desc in cur.description] if cur.description else []
+        cur.close()
+
+        if not test_result:
+            return jsonify({"message": "Test result not found"})
+
+        # Check if there are any notes attached to the test result
+        cur = mysql.connection.cursor()
+        query = "SELECT * FROM Notes WHERE TestResultId = %s"
+        cur.execute(query, (test_result_id,))
+        notes = cur.fetchall()
+        column_names = [desc[0] for desc in cur.description] if cur.description else []
+        cur.close()
+
+        # Convert the test result and notes to dictionaries
+        test_result_dict = dict(zip(column_names, test_result))
+        notes_list = [dict(zip(column_names, row)) for row in notes]
+
+        # Create a PDF
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Arial", size=12)
+
+        # Add a title
+        pdf.cell(200, 10, txt="Test Result Data", ln=True, align='C')
+
+        # Add test result data
+        for key, value in test_result_dict.items():
+            pdf.cell(200, 10, txt=f"{key}: {value}", ln=True)
+
+        # Add notes
+        pdf.cell(200, 10, txt="Notes:", ln=True)
+        for note in notes_list:
+            pdf.cell(200, 10, txt=f"- {note['note']}", ln=True)
+
+        # Save the PDF to a bytes buffer
+        pdf_buffer = io.BytesIO()
+        pdf.output(pdf_buffer)
+        pdf_buffer.seek(0)
+
+        return send_file(pdf_buffer, as_attachment=True, download_name=f'test_result_{test_result_id}_data.pdf', mimetype='application/pdf')
+
+    except Exception as e:
+        return jsonify({"message": "An error occurred"})
+    
+# Function to download a specific research result belonging to a patient
+@app.route('/download_research_result_pdf/<int:patient_id>/<int:result_id>', methods=['GET'])
+def download_research_result_pdf(patient_id, result_id):
+    try:
+        # Check if the patient exists
+        cur = mysql.connection.cursor()
+        query = "SELECT * FROM User WHERE Id = %s AND Role = '2'"
+        cur.execute(query, (patient_id,))
+        patient = cur.fetchone()
+        column_names = [desc[0] for desc in cur.description] if cur.description else []
+        cur.close()
+
+        if not patient:
+            return jsonify({"message": "Patient not found"})
+
+        # Check if the research result exists
+        cur = mysql.connection.cursor()
+        query = "SELECT * FROM ResearchResults WHERE Id = %s AND PatientId = %s"
+        cur.execute(query, (result_id, patient_id))
+        research_result = cur.fetchone()
+        column_names = [desc[0] for desc in cur.description] if cur.description else []
+        cur.close()
+
+        if not research_result:
+            return jsonify({"message": "Research result not found"})
+
+        # Create a PDF
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Arial", size=12)
+
+        # Add a title
+        pdf.cell(200, 10, txt="Research Result Data", ln=True, align='C')
+
+        # Add research result data
+        for key, value in dict(zip(column_names, research_result)).items():
+            pdf.cell(200, 10, txt=f"{key}: {value}", ln=True)
+
+        # Save the PDF to a bytes buffer
+        pdf_buffer = io.BytesIO()
+        pdf.output(pdf_buffer)
+        pdf_buffer.seek(0)
+
+        return send_file(pdf_buffer, as_attachment=True, download_name=f'research_result_{result_id}_data.pdf', mimetype='application/pdf')
+
+    except Exception as e:
+        return jsonify({"message": "An error occurred"})
 
 if __name__ == '__main__':  # Uitvoeren
     app.run(debug=True)
