@@ -31,6 +31,7 @@ def serialize_data(data):
         # Return data as is if it's not bytes
         return data
 
+# gets all doctors
 @app.route('/get_doctors', methods=['GET'])
 def get_doctors():
     try:
@@ -53,7 +54,33 @@ def get_doctors():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
+
+# gets a doctor by ID
+@app.route('/get_doctor/<int:doctor_id>', methods=['GET'])
+def get_doctor(doctor_id):
+    try:
+        cur = mysql.connection.cursor()
+        query = "SELECT * FROM User WHERE Id = %s AND Role = '1'"
+        cur.execute(query, (doctor_id,))
+        doctor = cur.fetchone()
+        column_names = [desc[0] for desc in cur.description] if cur.description else []
+        cur.close()
+        
+        if not doctor:
+            return jsonify({"error": "Doctor not found"}), 404
+
+        # Convert the result to a dictionary
+        doctor_dict = dict(zip(column_names, doctor))
+
+        # Serialize data to handle binary fields
+        serialized_doctor = serialize_data(doctor_dict)
+
+        return jsonify(serialized_doctor)
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# gets all patients
 @app.route('/get_patients', methods=['GET'])
 def get_patients():
     try:
@@ -76,7 +103,48 @@ def get_patients():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+# gets a patient by ID
+@app.route('/get_patient/<int:patient_id>', methods=['GET'])
+def get_patient(patient_id):
+    try:
+        cur = mysql.connection.cursor()
+        query = "SELECT * FROM User WHERE Id = %s AND Role = '2'"
+        cur.execute(query, (patient_id,))
+        patient = cur.fetchone()
+        column_names = [desc[0] for desc in cur.description] if cur.description else []
+        cur.close()
+        
+        if not patient:
+            return jsonify({"error": "Patient not found"}), 404
 
+        # Convert the result to a dictionary
+        patient_dict = dict(zip(column_names, patient))
+
+        # Serialize data to handle binary fields
+        serialized_patient = serialize_data(patient_dict)
+
+        return jsonify(serialized_patient)
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# delete a patient
+@app.route('/delete_patient/<int:patient_id>', methods=['DELETE'])
+def delete_patient(patient_id):
+    try:
+        cur = mysql.connection.cursor()
+        query = "DELETE FROM User WHERE Id = %s"
+        cur.execute(query, (patient_id,))
+        mysql.connection.commit()
+        cur.close()
+
+        return jsonify({"message": "Patient deleted successfully"})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# Get a patient their medication
 @app.route('/patients/<int:patient_id>/medication', methods=['GET'])
 def get_patient_medication(patient_id):
     try:
@@ -97,6 +165,7 @@ def get_patient_medication(patient_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# Get a patient their diagnosis
 @app.route('/patients/<int:patient_id>/diagnosis', methods=['GET'])
 def get_patient_diagnosis(patient_id):
     try:
