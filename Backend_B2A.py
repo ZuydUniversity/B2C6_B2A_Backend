@@ -5,6 +5,8 @@ import base64
 from flask import send_file
 from fpdf import FPDF
 import io
+import logging
+
 
 app = Flask(__name__)  # Initialiseren
 CORS(app)
@@ -15,6 +17,18 @@ app.config['MYSQL_PASSWORD'] = 'DitIsEchtHeelLeukBlok3006'
 app.config['MYSQL_DB'] = 'your_database_name'
 
 mysql = MySQL(app)
+
+logging.basicConfig(level=logging.DEBUG)
+
+@app.before_first_request
+def before_first_request_func():
+    try:
+        cur = mysql.connection.cursor()
+        cur.execute('SELECT 1')
+        cur.close()
+        app.logger.debug('MySQL connection is established and working.')
+    except Exception as e:
+        app.logger.error(f'Error connecting to MySQL: {e}')
 
 @app.route('/')
 def welcome():
