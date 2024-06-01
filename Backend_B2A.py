@@ -2,6 +2,9 @@ from flask import Flask, jsonify, request
 from flask_mysqldb import MySQL
 from flask_cors import CORS
 import base64
+from flask import send_file
+from fpdf import FPDF
+import io
 
 app = Flask(__name__)  # Initialiseren
 CORS(app)
@@ -186,6 +189,44 @@ def get_patient_diagnosis(patient_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# Function to generate a PDF of a specific patient's data (Needs testing and probably some adjustments)
+@app.route('/download_patient_pdf/<int:patient_id>', methods=['GET'])
+def download_patient_pdf(patient_id):
+    try:
+        cur = mysql.connection.cursor()
+        query = "SELECT * FROM User WHERE Id = %s AND Role = '2'"
+        cur.execute(query, (patient_id,))
+        patient = cur.fetchone()
+        column_names = [desc[0] for desc in cur.description] if cur.description else []
+        cur.close()
+
+        if not patient:
+            return jsonify({"error": "Patient not found"}), 404
+
+        # Convert the result to a dictionary
+        patient_dict = dict(zip(column_names, patient))
+
+        # Create a PDF
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Arial", size=12)
+        
+        # Add a title
+        pdf.cell(200, 10, txt="Patient Data", ln=True, align='C')
+
+        # Add patient data
+        for key, value in patient_dict.items():
+            pdf.cell(200, 10, txt=f"{key}: {value}", ln=True, align='L')
+
+        # Save the PDF to a bytes buffer
+        pdf_buffer = io.BytesIO()
+        pdf.output(pdf_buffer)
+        pdf_buffer.seek(0)
+
+        return send_file(pdf_buffer, as_attachment=True, download_name=f'patient_{patient_id}_data.pdf', mimetype='application/pdf')
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':  # Uitvoeren
     app.run(debug=True)
