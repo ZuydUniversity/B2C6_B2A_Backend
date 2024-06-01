@@ -29,6 +29,7 @@ def before_first_request_func():
         app.logger.debug('MySQL connection is established and working.')
     except Exception as e:
         app.logger.error(f'Error connecting to MySQL: {e}')
+        return jsonify({"Error connecting to MySQL": str(e)}), 500
 
 @app.route('/')
 def welcome():
