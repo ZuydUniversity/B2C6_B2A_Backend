@@ -6,10 +6,10 @@ app = Flask(__name__, template_folder='templates')
 CORS(app)
 
 #Connectie met database
-app.config['MYSQL_HOST'] = 'localhost'
-app.config['MYSQL_USER'] = 'root'
-app.config['MYSQL_PASSWORD'] = '12345'
-app.config['MYSQL_DB'] = 'logindatabase' #aanpassen naar eigen database
+app.config['MYSQL_HOST'] = '20.16.87.228'
+app.config['MYSQL_USER'] = 'Userb2a'
+app.config['MYSQL_PASSWORD'] = 'DitIsEchtHeelLeukBlok3006'
+app.config['MYSQL_DB'] = 'your_database_name'
 mysql = MySQL(app)
 
 
@@ -18,35 +18,36 @@ def login():
     email = request.json["email"]
     password = request.json["password"]
     cursor = mysql.connection.cursor()
-    cursor.execute('''SELECT COUNT(*) FROM User2 WHERE email = %s AND BINARY password = %s''', (email, password,))
+    cursor.execute('''SELECT COUNT(*) FROM User WHERE Email = %s AND BINARY Password = %s''', (email, password,))
     Exists = cursor.fetchone()[0]
     if(Exists == 0):
-        print("failed")
         return "", 400
     else:
-        print("success")
         return  "", 200
 
 
 
 def emailCheck(email):
     cursor = mysql.connection.cursor()
-    cursor.execute('''SELECT COUNT(*) FROM User2 WHERE email = %s''', (email,)) 
+    cursor.execute('''SELECT COUNT(*) FROM User WHERE Email = %s''', (email,)) 
     EmailUsed = cursor.fetchone()[0]
     cursor.close()
     return EmailUsed
 
 @app.route("/register", methods=["POST"])
 def register():
-    print("register")  #test
-    email = request.form["email"]
+    form_data = request.form.copy()
+    for x in form_data:
+        if form_data[x] == "":
+            form_data[x] = None
+
+    email = form_data["email"]
     emailUsed = emailCheck(email)
-    print(email, emailUsed)
     if(emailUsed == 0):
-        password = request.form["password"]
-        firstName = request.form["firstName"]
-        lastName = request.form["lastName"]
-        accountType = request.form["accountType"]
+        password = form_data["password"]
+        firstName = form_data["firstName"]
+        lastName = form_data["lastName"]
+        accountType = form_data["accountType"]
         role = None
         if accountType == "Doctor":
             role = 1
@@ -56,31 +57,21 @@ def register():
             role = 3
         elif accountType == "Researcher":
             role = 4
-        employeeNumber = request.form["employeeNumber"]
-        if(employeeNumber == ""):
-            employeeNumber = None
-        specialization = request.form["specialization"]
-        if(specialization == ""):
-            specialization = None
-        patientNumber = request.form["patientNumber"]
-        if(patientNumber == ""):
-            patientNumber = None
-        gender = request.form["gender"]
-        if(gender == ""):
-            gender = None
-        birthDate = request.form["birthDate"]
-        if(birthDate == ""):
-            birthDate = None
-        phoneNumber = request.form["phoneNumber"]
-        if(phoneNumber == ""):
-            phoneNumber = None
+        employeeNumber = form_data["employeeNumber"]
+        specialization = form_data["specialization"]
+        patientNumber = form_data["patientNumber"]
+        gender = form_data["gender"]
+        birthDate = form_data["birthDate"]
+        phoneNumber = form_data["phoneNumber"]
         photo = request.files["photo"]
+        contact_name = form_data["contact_name"]
+        contact_email = form_data["contact_email"]
+        contact_phone = form_data["contact_phone"]
         photo_data = photo.read()
-
         cursor = mysql.connection.cursor()
         
         try:
-            cursor.execute('''INSERT INTO User2 (Role, Email, Password, FirstName, LastName, EmployeeNumber, Specialization, PatientNumber, Gender, BirthDate, PhoneNumber, Photo) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s, %s)''', (role, email, password, firstName, lastName, employeeNumber, specialization, patientNumber, gender, birthDate, phoneNumber, photo_data))
+            cursor.execute('''INSERT INTO User (Role, Email, Password, Name, Lastname, Employee_number, Specialization, Patient_number, Gender, Birthdate, Phone_number, Photo, Contactperson_email, Contactperson_name, Contactperson_phone_number) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)''', (role, email, password, firstName, lastName, employeeNumber, specialization, patientNumber, gender, birthDate, phoneNumber, photo_data, contact_email, contact_name, contact_phone,))
             mysql.connection.commit()
             cursor.close()
             return "", 200
@@ -95,11 +86,10 @@ def register():
 def forgot():  
     email = request.json["email"]
     emailUsed = emailCheck(email)
-    print(email, emailUsed)
     if(emailUsed == 1):
         password = request.json["password"]
         cursor = mysql.connection.cursor()
-        cursor.execute('''UPDATE User2 SET Password = %s WHERE Email = %s''', (password, email))
+        cursor.execute('''UPDATE User SET Password = %s WHERE Email = %s''', (password, email))
         mysql.connection.commit()
         cursor.close()
         return "", 200
