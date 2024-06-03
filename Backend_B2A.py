@@ -819,161 +819,161 @@ def edit_note(patient_id, result_id):
     except Exception as e:
         return jsonify({"message": "An error occurred"})
     
-# Create an Exercise
-@app.route('/patients/<int:patient_id>/exercises', methods=['POST'])
-def add_patient_exercise(patient_id):
+# Create an excercise
+@app.route('/patients/<int:patient_id>/excercise', methods=['POST'])
+def add_patient_excercise():
     try:
-        exercise_data = request.get_json()
+        excercise_data = request.get_json()
 
-        # Validate exercise data
+        # Validate excercise data
         required_fields = ['name', 'description', 'cmas_id']
         for field in required_fields:
-            if field not in exercise_data:
+            if field not in excercise_data:
                 return jsonify({"error": f"{field.capitalize()} is a required field"}), 400
 
         # Check if the CMAS exists
         cur = mysql.connection.cursor()
         query = "SELECT * FROM CMAS WHERE Id = %s"
-        cur.execute(query, (exercise_data['cmas_id'],))
+        cur.execute(query, (excercise_data['cmas_id'],))
         cmas = cur.fetchone()
         cur.close()
 
         if not cmas:
             return jsonify({"error": "CMAS not found"}), 404
 
-        # Add exercise for the patient
+        # Add excercise for the patient
         cur = mysql.connection.cursor()
-        query = "INSERT INTO Exercise (Name, Description, CMASId) VALUES (%s, %s, %s)"
-        cur.execute(query, (exercise_data['name'], exercise_data['description'], exercise_data['cmas_id']))
+        query = "INSERT INTO Excercise (Name, Description, CMASId) VALUES (%s, %s, %s)"
+        cur.execute(query, (excercise_data['name'], excercise_data['description'], excercise_data['cmas_id']))
         mysql.connection.commit()
         cur.close()
 
-        return jsonify({"message": "Exercise added successfully"})
+        return jsonify({"message": "Excercise added successfully"})
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
-# Get a patient's exercises
-@app.route('/patients/<int:patient_id>/exercises', methods=['GET'])
-def get_patient_exercises(patient_id):
+# Get a patient's excercises
+@app.route('/patients/<int:patient_id>/excercises', methods=['GET'])
+def get_patient_excercises(patient_id):
     try:
         cur = mysql.connection.cursor()
         query = """
             SELECT E.* 
-            FROM Exercise E
+            FROM Excercise E
             INNER JOIN CMAS C ON E.CMASId = C.Id
             INNER JOIN Result R ON C.ResultId = R.Id
             WHERE R.PatientId = %s
         """
         cur.execute(query, (patient_id,))
-        exercises = cur.fetchall()
+        excercises = cur.fetchall()
 
-        if not exercises:
+        if not excercises:
             return jsonify([])
 
         column_names = [desc[0] for desc in cur.description]
         cur.close()
 
-        exercises_list = [dict(zip(column_names, row)) for row in exercises]
+        excercises_list = [dict(zip(column_names, row)) for row in excercises]
 
-        return jsonify(exercises_list)
+        return jsonify(excercises_list)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# Get a specific exercise
-@app.route('/patients/<int:patient_id>/exercises/<int:exercise_id>', methods=['GET'])
-def get_patient_exercise(patient_id, exercise_id):
+# Get a specific excercise
+@app.route('/patients/<int:patient_id>/excercises/<int:excercise_id>', methods=['GET'])
+def get_patient_excercise(patient_id, excercise_id):
     try:
         cur = mysql.connection.cursor()
         query = """
             SELECT E.* 
-            FROM Exercise E
+            FROM Excercise E
             INNER JOIN CMAS C ON E.CMASId = C.Id
             INNER JOIN Result R ON C.ResultId = R.Id
             WHERE R.PatientId = %s AND E.Id = %s
         """
-        cur.execute(query, (patient_id, exercise_id))
-        exercise = cur.fetchone()
+        cur.execute(query, (patient_id, excercise_id))
+        excercise = cur.fetchone()
 
-        if not exercise:
-            return jsonify({"error": "Exercise not found"}), 404
+        if not excercise:
+            return jsonify({"error": "Excercise not found"}), 404
 
         column_names = [desc[0] for desc in cur.description]
-        exercise_dict = dict(zip(column_names, exercise))
+        excercise_dict = dict(zip(column_names, excercise))
         cur.close()
 
-        return jsonify(exercise_dict)
+        return jsonify(excercise_dict)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# Update a patient's exercise
-@app.route('/patients/<int:patient_id>/exercises/<int:exercise_id>', methods=['PUT'])
-def update_patient_exercise(patient_id, exercise_id):
+# Update a patient's excercise
+@app.route('/patients/<int:patient_id>/excercises/<int:excercise_id>', methods=['PUT'])
+def update_patient_excercise(patient_id, excercise_id):
     try:
-        exercise_data = request.get_json()
+        excercise_data = request.get_json()
 
-        # Validate exercise data
+        # Validate excercise data
         required_fields = ['name', 'description', 'cmas_id']
         for field in required_fields:
-            if field not in exercise_data:
+            if field not in excercise_data:
                 return jsonify({"error": f"{field.capitalize()} is a required field"}), 400
 
-        # Check if the exercise exists and belongs to the patient
+        # Check if the excercise exists and belongs to the patient
         cur = mysql.connection.cursor()
         query = """
             SELECT E.* 
-            FROM Exercise E
+            FROM Excercise E
             INNER JOIN CMAS C ON E.CMASId = C.Id
             INNER JOIN Result R ON C.ResultId = R.Id
             WHERE R.PatientId = %s AND E.Id = %s
         """
-        cur.execute(query, (patient_id, exercise_id))
-        exercise = cur.fetchone()
+        cur.execute(query, (patient_id, excercise_id))
+        excercise = cur.fetchone()
         cur.close()
 
-        if not exercise:
-            return jsonify({"error": "Exercise not found for this patient"}), 404
+        if not excercise:
+            return jsonify({"error": "Excercise not found for this patient"}), 404
 
-        # Update exercise for the patient
+        # Update excercise for the patient
         cur = mysql.connection.cursor()
-        query = "UPDATE Exercise SET Name = %s, Description = %s, CMASId = %s WHERE Id = %s"
-        cur.execute(query, (exercise_data['name'], exercise_data['description'], exercise_data['cmas_id'], exercise_id))
+        query = "UPDATE Excercise SET Name = %s, Description = %s, CMASId = %s WHERE Id = %s"
+        cur.execute(query, (excercise_data['name'], excercise_data['description'], excercise_data['cmas_id'], excercise_id))
         mysql.connection.commit()
         cur.close()
 
-        return jsonify({"message": "Exercise updated successfully"})
+        return jsonify({"message": "Excercise updated successfully"})
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# Delete a patient's exercise
-@app.route('/patients/<int:patient_id>/exercises/<int:exercise_id>', methods=['DELETE'])
-def delete_patient_exercise(patient_id, exercise_id):
+# Delete a patient's excercise
+@app.route('/patients/<int:patient_id>/excercises/<int:excercise_id>', methods=['DELETE'])
+def delete_patient_excercise(patient_id, excercise_id):
     try:
-        # Check if the exercise exists and belongs to the patient
+        # Check if the excercise exists and belongs to the patient
         cur = mysql.connection.cursor()
         query = """
             SELECT E.* 
-            FROM Exercise E
+            FROM Excercise E
             INNER JOIN CMAS C ON E.CMASId = C.Id
             INNER JOIN Result R ON C.ResultId = R.Id
             WHERE R.PatientId = %s AND E.Id = %s
         """
-        cur.execute(query, (patient_id, exercise_id))
-        exercise = cur.fetchone()
+        cur.execute(query, (patient_id, excercise_id))
+        excercise = cur.fetchone()
         cur.close()
 
-        if not exercise:
-            return jsonify({"error": "Exercise not found for this patient"}), 404
+        if not excercise:
+            return jsonify({"error": "Excercise not found for this patient"}), 404
 
-        # Delete the exercise
+        # Delete the excercise
         cur = mysql.connection.cursor()
-        query = "DELETE FROM Exercise WHERE Id = %s"
-        cur.execute(query, (exercise_id,))
+        query = "DELETE FROM Excercise WHERE Id = %s"
+        cur.execute(query, (excercise_id,))
         mysql.connection.commit()
         cur.close()
 
-        return jsonify({"message": "Exercise deleted successfully"})
+        return jsonify({"message": "Excercise deleted successfully"})
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
