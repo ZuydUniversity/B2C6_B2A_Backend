@@ -20,17 +20,22 @@ mysql = MySQL(app)
 
 logging.basicConfig(level=logging.DEBUG)
 
+# Define and initialize the flag
+initialization_flag = False
+
 @app.before_request
 def before_request_func():
-    try:
-        cur = mysql.connection.cursor()
-        cur.execute('SELECT 1')
-        cur.close()
-        app.logger.debug('MySQL connection is established and working.')
-        initialization_flag = True
-    except Exception as e:
-        app.logger.error(f'Error connecting to MySQL: {e}')
-        return jsonify({"Error connecting to MySQL": str(e)}), 500
+    global initialization_flag
+    if not initialization_flag:
+        try:
+            cur = mysql.connection.cursor()
+            cur.execute('SELECT 1')
+            cur.close()
+            app.logger.debug('MySQL connection is established and working.')
+            initialization_flag = True
+        except Exception as e:
+            app.logger.error(f'Error connecting to MySQL: {e}')
+            return jsonify({"Error connecting to MySQL": str(e)}), 500
 
 @app.route('/')
 def welcome():
