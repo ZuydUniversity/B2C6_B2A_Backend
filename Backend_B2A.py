@@ -20,28 +20,58 @@ logging.basicConfig(level=logging.DEBUG)
 
 initialization_flag = False
 
+@app.before_request
+def before_request_func():
+    global initialization_flag
+    if not initialization_flag:
+        try:
+            cur = mysql.connection.cursor()
+            cur.execute('SELECT 1')
+            cur.close()
+            app.logger.debug('MySQL connection is established and working.')
+            initialization_flag = True
+        except Exception as e:
+            app.logger.error(f'Error connecting to MySQL: {e}')
+            return jsonify({"Error connecting to MySQL": str(e)}), 500
 
+def serialize_data(data):
+    if isinstance(data, bytes):
+        # Convert bytes to base64-encoded string
+        return base64.b64encode(data).decode('utf-8')
+    elif isinstance(data, dict):
+        # Recursively process dictionary values
+        return {k: serialize_data(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        # Recursively process list elements
+        return [serialize_data(item) for item in data]
+    else:
+        # Return data as is if it's not bytes
+        return data
 
 @app.route("/login", methods=["POST"])
 def login():
-    email = request.json["email"]
-    password = request.json["password"]
-    cursor = mysql.connection.cursor()
-    cursor.execute('''SELECT COUNT(*) FROM User WHERE Email = %s AND BINARY Password = %s''', (email, password,))
-    Exists = cursor.fetchone()[0]
-    if(Exists == 0):
-        return "", 400
-    else:
-        return  "", 200
-
-
+    try:
+        email = request.json["email"]
+        password = request.json["password"]
+        cursor = mysql.connection.cursor()
+        cursor.execute('''SELECT COUNT(*) FROM User WHERE Email = %s AND BINARY Password = %s''', (email, password,))
+        Exists = cursor.fetchone()[0]
+        if(Exists == 0):
+            return "", 400
+        else:
+            return  "", 200
+    except Exception as e:
+        return "", 500
 
 def emailCheck(email):
-    cursor = mysql.connection.cursor()
-    cursor.execute('''SELECT COUNT(*) FROM User WHERE Email = %s''', (email,)) 
-    EmailUsed = cursor.fetchone()[0]
-    cursor.close()
-    return EmailUsed
+    try:
+        cursor = mysql.connection.cursor()
+        cursor.execute('''SELECT COUNT(*) FROM User WHERE Email = %s''', (email,)) 
+        EmailUsed = cursor.fetchone()[0]
+        cursor.close()
+        return EmailUsed
+    except Exception as e:
+        return -1
 
 @app.route("/register", methods=["POST"])
 def register():
@@ -52,6 +82,10 @@ def register():
 
     email = form_data["email"]
     emailUsed = emailCheck(email)
+
+    if(emailUsed == -1):
+        return "", 500
+    
     if(emailUsed == 0):
         password = form_data["password"]
         firstName = form_data["firstName"]
@@ -85,58 +119,39 @@ def register():
             cursor.close()
             return "", 200
         except Exception as e:
-            return "", 500  
-
-        
+            return "", 500       
     else:
         return "", 400
 
 @app.route("/forgotpassword", methods=["POST"])
 def forgot():  
-    email = request.json["email"]
-    emailUsed = emailCheck(email)
-    if(emailUsed == 1):
-        password = request.json["password"]
-        cursor = mysql.connection.cursor()
-        cursor.execute('''UPDATE User SET Password = %s WHERE Email = %s''', (password, email))
-        mysql.connection.commit()
-        cursor.close()
-        return "", 200
-    else:
-        return "", 500 
+    try:
+        email = request.json["email"]
+        emailUsed = emailCheck(email)
+
+        if(emailUsed == -1):
+            return "", 500
+        
+        if(emailUsed == 1):
+            password = request.json["password"]
+            cursor = mysql.connection.cursor()
+            cursor.execute('''UPDATE User SET Password = %s WHERE Email = %s''', (password, email))
+            mysql.connection.commit()
+            cursor.close()
+            return "", 200
+        else:
+            return "", 400 
+    except Exception as e:
+            return "", 500  
 
 
 
 
 
 
-@app.before_request
-def before_request_func():
-    global initialization_flag
-    if not initialization_flag:
-        try:
-            cur = mysql.connection.cursor()
-            cur.execute('SELECT 1')
-            cur.close()
-            app.logger.debug('MySQL connection is established and working.')
-            initialization_flag = True
-        except Exception as e:
-            app.logger.error(f'Error connecting to MySQL: {e}')
-            return jsonify({"Error connecting to MySQL": str(e)}), 500
 
-def serialize_data(data):
-    if isinstance(data, bytes):
-        # Convert bytes to base64-encoded string
-        return base64.b64encode(data).decode('utf-8')
-    elif isinstance(data, dict):
-        # Recursively process dictionary values
-        return {k: serialize_data(v) for k, v in data.items()}
-    elif isinstance(data, list):
-        # Recursively process list elements
-        return [serialize_data(item) for item in data]
-    else:
-        # Return data as is if it's not bytes
-        return data
+
+
 
 #   --------------------------
 #   |   User API Functions   |   
