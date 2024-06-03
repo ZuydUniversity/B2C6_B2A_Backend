@@ -192,26 +192,46 @@ def get_patient_medication(patient_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# Get a patient their diagnosis
 @app.route('/patients/<int:patient_id>/diagnosis', methods=['GET'])
 def get_patient_diagnosis(patient_id):
     try:
         cur = mysql.connection.cursor()
-        query = "SELECT * FROM Diagnosis WHERE PatientId = %s"
+        query = "SELECT Diagnosis FROM Diagnosis WHERE PatientId = %s"
         cur.execute(query, (patient_id,))
         diagnoses = cur.fetchall()
 
         if not diagnoses:
             return jsonify({"error": "No diagnoses found for this patient"}), 404
 
-        column_names = [desc[0] for desc in cur.description]
         cur.close()
 
-        diagnoses_list = [dict(zip(column_names, row)) for row in diagnoses]
+        diagnoses_list = [row[0] for row in diagnoses]
 
         return jsonify(diagnoses_list)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+
+# # Get a patient their diagnosis
+# @app.route('/patients/<int:patient_id>/diagnosis', methods=['GET'])
+# def get_patient_diagnosis(patient_id):
+#     try:
+#         cur = mysql.connection.cursor()
+#         query = "SELECT * FROM Diagnosis WHERE PatientId = %s"
+#         cur.execute(query, (patient_id,))
+#         diagnoses = cur.fetchall()
+
+#         if not diagnoses:
+#             return jsonify({"error": "No diagnoses found for this patient"}), 404
+
+#         column_names = [desc[0] for desc in cur.description]
+#         cur.close()
+
+#         diagnoses_list = [dict(zip(column_names, row)) for row in diagnoses]
+
+#         return jsonify(diagnoses_list)
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
     
 # Update patient information
 @app.route('/update_patient/<int:patient_id>', methods=['PUT'])
