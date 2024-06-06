@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, send_file
+from flask import Flask, jsonify, request, send_file, session
 from flask_mysqldb import MySQL
 from flask_cors import CORS
 from fpdf import FPDF
@@ -7,7 +7,8 @@ import io
 import logging
 
 app = Flask(__name__)
-CORS(app)
+app.secret_key = 'hgb345kjhu56uh23cvb'
+CORS(app, supports_credentials=True)
 
 
 app.config['MYSQL_HOST'] = '20.16.87.228'
@@ -54,14 +55,30 @@ def login():
         email = request.json["email"]
         password = request.json["password"]
         cursor = mysql.connection.cursor()
-        cursor.execute('''SELECT COUNT(*) FROM User WHERE Email = %s AND BINARY Password = %s''', (email, password,))
-        Exists = cursor.fetchone()[0]
-        if(Exists == 0):
+        cursor.execute('''SELECT Role FROM User WHERE Email = %s AND BINARY Password = %s''', (email, password,))
+        result = cursor.fetchone()
+        if(result == None):
             return "", 400
         else:
-            return  "", 200
+            role = result[0]
+            session["email"] = email
+            return jsonify({"role": role, "email": email}), 200
     except Exception as e:
+        app.logger.error(f'Error during login: {e}')
         return "", 500
+        
+@app.route("/logout", methods=["POST"])
+def logout():
+    session.pop("email", None)
+    return "", 200
+
+@app.route("/checksession", methods=["POST"])
+def checksession():
+    if "email" in session:
+        return "", 200
+    else:
+        return "", 401
+
 
 def emailCheck(email):
     try:
@@ -81,12 +98,11 @@ def register():
             form_data[x] = None
 
     email = form_data["email"]
-    emailUsed = emailCheck(email)
+    emailUsed = int(emailCheck(email))
 
     if(emailUsed == -1):
         return "", 500
-    
-    if(emailUsed == 0):
+    elif(emailUsed == 0):
         password = form_data["password"]
         firstName = form_data["firstName"]
         lastName = form_data["lastName"]
@@ -100,25 +116,29 @@ def register():
             role = 3
         elif accountType == "Researcher":
             role = 4
+            
         employeeNumber = form_data["employeeNumber"]
         specialization = form_data["specialization"]
         patientNumber = form_data["patientNumber"]
         gender = form_data["gender"]
         birthDate = form_data["birthDate"]
         phoneNumber = form_data["phoneNumber"]
-        photo = request.files["photo"]
         contact_name = form_data["contact_name"]
         contact_email = form_data["contact_email"]
         contact_phone = form_data["contact_phone"]
-        photo_data = photo.read()
-        cursor = mysql.connection.cursor()
+        photo_data = None
+        if 'photo' in request.files:
+            photo = request.files["photo"]
+            photo_data = photo.read()
         
+        cursor = mysql.connection.cursor()
         try:
             cursor.execute('''INSERT INTO User (Role, Email, Password, Name, Lastname, Employee_number, Specialization, Patient_number, Gender, Birthdate, Phone_number, Photo, Contactperson_email, Contactperson_name, Contactperson_phone_number) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)''', (role, email, password, firstName, lastName, employeeNumber, specialization, patientNumber, gender, birthDate, phoneNumber, photo_data, contact_email, contact_name, contact_phone,))
             mysql.connection.commit()
             cursor.close()
             return "", 200
         except Exception as e:
+            app.logger.error(f'Error during registration: {e}')
             return "", 500       
     else:
         return "", 400
