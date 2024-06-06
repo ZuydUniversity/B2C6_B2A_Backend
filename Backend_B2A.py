@@ -1261,6 +1261,47 @@ def download_research_result_pdf(patient_id, result_id):
     except Exception as e:
         return jsonify({"message": "An error occurred"})
 
+#   ----------------------------------
+#   |   Appointments API Functions   |   
+#   ----------------------------------
+
+@app.route('/appointment/get_all', methods=['GET'])
+def get_all_appointments():
+    try:
+        cur = mysql.connection.cursor()
+        query = "SELECT * FROM Appointment"
+        cur.execute(query)
+        appointments = cur.fetchall()
+
+        if not appointments:
+            return jsonify([]), 200
+        
+        appointment_list = [dict(zip([desc[0] for desc in cur.description], row)) for row in appointments]
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cur.close()
+    
+    return jsonify(appointment_list)
+
+# @app.route('/appointment/<int:user_id>', methods=['GET'])
+# def get_user_appointments():
+#     try:
+#         cur = mysql.connection.cursor()
+#         query = "SELECT * FROM Appointment WHERE "
+#         cur.execute(query)
+#         appointments = cur.fetchall()
+
+#         if not appointments:
+#             return jsonify([]), 200
+        
+#         appointment_list = [dict(zip([desc[0] for desc in cur.description], row)) for row in appointments]
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
+#     finally:
+#         cur.close()
+    
+#     return jsonify(appointment_list)    
 
 if __name__ == '__main__':  # Uitvoeren
     app.run(debug=True)
