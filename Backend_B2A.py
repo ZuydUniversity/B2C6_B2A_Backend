@@ -1284,24 +1284,106 @@ def get_all_appointments():
     
     return jsonify(appointment_list)
 
-# @app.route('/appointment/<int:user_id>', methods=['GET'])
-# def get_user_appointments():
-#     try:
-#         cur = mysql.connection.cursor()
-#         query = "SELECT * FROM Appointment WHERE "
-#         cur.execute(query)
-#         appointments = cur.fetchall()
+@app.route('/user/<int:user_id>/appointment', methods=['GET'])
+def get_user_appointments(user_id):
+    try:
+        cur = mysql.connection.cursor()
+        query = """
+                SELECT * 
+                FROM Appointment a 
+                JOIN AppointmentUser au on a.id = au.appointmentId 
+                WHERE au.userId = %s
+                """
+        cur.execute(query, (user_id))
+        appointments = cur.fetchall()
 
-#         if not appointments:
-#             return jsonify([]), 200
-        
-#         appointment_list = [dict(zip([desc[0] for desc in cur.description], row)) for row in appointments]
-#     except Exception as e:
-#         return jsonify({"error": str(e)}), 500
-#     finally:
-#         cur.close()
-    
-#     return jsonify(appointment_list)    
+        if not appointments:
+            return jsonify([]), 200
+             
+        appointment_list = [dict(zip([desc[0] for desc in cur.description], row)) for row in appointments]
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cur.close()  
+    return jsonify(appointment_list)    
+
+@app.route('/doctor/<int:doctor_id>/appointment', methods=['GET'])
+def get_doctor_appointments(doctor_id):
+    try:
+        cur = mysql.connection.cursor()
+        query = """
+                SELECT * 
+                FROM Appointment a 
+                WHERE a.DoctorId = %s
+                """
+        cur.execute(query, (doctor_id))
+        appointments = cur.fetchall()
+
+        if not appointments:
+            return jsonify([]), 200
+             
+        appointment_list = [dict(zip([desc[0] for desc in cur.description], row)) for row in appointments]
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cur.close()  
+    return jsonify(appointment_list)    
+
+@app.route('/patient/<int:patient_id>/appointment', methods=['GET'])
+def get_doctor_appointments(patient_id):
+    try:
+        cur = mysql.connection.cursor()
+        query = """
+                SELECT * 
+                FROM Appointment a 
+                WHERE a.PatientId = %s
+                """
+        cur.execute(query, (patient_id))
+        appointments = cur.fetchall()
+
+        if not appointments:
+            return jsonify([]), 200
+             
+        appointment_list = [dict(zip([desc[0] for desc in cur.description], row)) for row in appointments]
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cur.close()  
+    return jsonify(appointment_list) 
+
+# Not finished
+@app.route('/appointment/create')
+def create_appointment():
+    try:
+        appointment_data = request.get_json()
+
+        # Validate medication data
+        required_fields = ['patient_id', 'doctor_id', 'date_time', 'description']
+        for field in required_fields:
+            if field not in appointment_data:
+                return jsonify({"error": f"{field.capitalize()} is a required field"}), 400
+
+        # Check if the patient & doctor exist
+        # Make it return true or false
+        cur = mysql.connection.cursor()
+        query = "SELECT * FROM patient WHERE Id = %s AND Role = '2' AND SELECT"
+        cur.execute(query, (patient_id,))
+        patient = cur.fetchone()
+
+
+        if not patient:
+            return jsonify({"error": "Patient not found"}), 404
+
+        # Add medication for the patient
+        cur = mysql.connection.cursor()
+        query = "INSERT INTO Medication (PatientId, Name, Dosage, StartDate, Frequency) VALUES (%s, %s, %s, %s, %s)"
+        cur.execute(query, (patient_id, medication_data['name'], medication_data['dosage'], medication_data['start_date'], medication_data['frequency']))
+        mysql.connection.commit()
+    except Exception as e:
+        return jsonify({"error": str(e)}), ,500
+    finally:
+        cur.close()
+    return jsonify({"message": "Medication added successfully"})
 
 if __name__ == '__main__':  # Uitvoeren
     app.run(debug=True)
