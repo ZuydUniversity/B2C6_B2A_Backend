@@ -3,6 +3,7 @@ from flask_mysqldb import MySQL
 from flask_cors import CORS
 from fpdf import FPDF
 from dotenv import load_dotenv
+from datetime import datetime
 import base64
 import io
 import logging
@@ -1271,10 +1272,10 @@ def get_all_appointments():
         query = """
                 SELECT a.Id as AppointmentId, a.Date, a.Description, a.Location,
                         u.Id as UserId, u.Name, u.Lastname
-                FROM appointments a
-                JOIN Appointment_Users au ON a.Id = au.AppointmentId
-                JOIN users u ON au.UserId = u.Id
-            """
+                FROM Appointment a
+                JOIN Appointment-Users au ON a.Id = au.AppointmentId
+                JOIN Users u ON au.UserId = u.Id
+                """
         cur.execute(query)
         appointments = cur.fetchall()
        
@@ -1318,7 +1319,7 @@ def get_all_user_appointments(user_id):
                 SELECT a.Id as AppointmentId, a.Date, a.Description, a.Location,
                         u.Id as UserId, u.Name, u.Lastname
                 FROM appointments a
-                JOIN Appointment_Users au ON a.Id = au.AppointmentId
+                JOIN Appointment-Users au ON a.Id = au.AppointmentId
                 JOIN users u ON au.UserId = u.Id
                 WHERE au.UserId = %s
                 """
@@ -1368,6 +1369,7 @@ def create_appointment():
         }
         """
         appointment_data = request.get_json()
+        cur = mysql.connection.cursor()
 
         # Validate appointment data
         required_fields = ['date', 'description', 'participants']
@@ -1378,7 +1380,7 @@ def create_appointment():
         # Check if all participants exist
         participants_exist = True
         for participant_id in appointment_data.get('participants', []):
-            cur.execute("SELECT * FROM user WHERE Id = %s", (participant_id,))
+            cur.execute("SELECT * FROM User WHERE Id = %s", (participant_id,))
             participant = cur.fetchone()
             if not participant:
                 participants_exist = False
@@ -1388,7 +1390,6 @@ def create_appointment():
             return jsonify({"error": "One or more participants not found"}), 404
 
         # Add appointment
-        cur = mysql.connection.cursor()
         cur.execute("""
                     INSERT INTO Appointment (Date, Description) 
                     VALUES (%s, %s)
@@ -1401,10 +1402,10 @@ def create_appointment():
 
         for participant in appointment_data.get('participants'):
             cur.execute("""
-                        INSERT into Appointment_Users (UserId, AppointmentId)
+                        INSERT into `Appointment-Users` (AppointmentId, UserId)
                         VALUES (%s, %s)
                         """,
-                        (participant, appointment_id))
+                        (appointment_id, participant))
         mysql.connection.commit()
 
     except Exception as e:
@@ -1461,7 +1462,7 @@ def update_appointment(appointment_id):
         mysql.connection.commit()
 
         # Retrieve existing participants
-        cur.execute("SELECT UserId FROM Appointment_Users WHERE AppointmentId = %s", (appointment_id,))
+        cur.execute("SELECT UserId FROM Appointment-Users WHERE AppointmentId = %s", (appointment_id,))
         existing_participants = set(row[0] for row in cur.fetchall())
 
         # Identify participants
@@ -1470,10 +1471,10 @@ def update_appointment(appointment_id):
         participants_to_remove = existing_participants - new_participants
 
         for participant_id in participants_to_add:
-            cur.execute("INSERT INTO Appointment_Users (AppointmentId, UserId) VALUES (%s, %s)", (appointment_id, participant_id))
+            cur.execute("INSERT INTO Appointment-Users (AppointmentId, UserId) VALUES (%s, %s)", (appointment_id, participant_id))
 
         for participant_id in participants_to_remove:
-            cur.execute("DELETE FROM Appointment_Users WHERE AppointmentId = %s AND UserId = %s", (appointment_id, participant_id))
+            cur.execute("DELETE FROM Appointment-Users WHERE AppointmentId = %s AND UserId = %s", (appointment_id, participant_id))
 
         mysql.connection.commit()
     except Exception as e:
@@ -1496,7 +1497,7 @@ def delete_appointment(appointment_id):
 
         cur.execute("START TRANSACTION")
         cur.execute("""
-                    DELETE FROM Appointment_Users
+                    DELETE FROM Appointment-Users
                     WHERE AppointmentId = %s
                     """,
                     (appointment_id,))
@@ -1547,7 +1548,7 @@ def get_user_appointments(user_id):
                     SELECT a.Id as AppointmentId, a.Date, a.Description, a.Location,
                         u.Id as UserId, u.Name, u.Lastname
                     FROM appointments a
-                    JOIN Appointment_Users au ON a.Id = au.AppointmentId
+                    JOIN Appointment-Users au ON a.Id = au.AppointmentId
                     JOIN Users u ON au.UserId = u.Id
                     WHERE au.UserId = %s AND a.date >= %s AND a.date <= %s
                     """, 
