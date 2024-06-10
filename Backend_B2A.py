@@ -7,6 +7,7 @@ import io
 import logging
 import json  # Import the json module
 import os
+from datetime import datetime
 
 app = Flask(__name__)
 CORS(app)
@@ -329,6 +330,14 @@ def update_patient(patient_id):
     try:
         # Get the updated data from the request body
         updated_data = request.get_json()
+
+        # Convert Birthdate from 'Wed, 03 Jul 2019 00:00:00 GMT' to 'YYYY-MM-DD'
+        if 'Birthdate' in updated_data:
+            birthdate_str = updated_data['Birthdate']
+            # Assuming the date is always in the format 'Day, DD Mon YYYY HH:MM:SS GMT'
+            birthdate_obj = datetime.strptime(birthdate_str, '%a, %d %b %Y %H:%M:%S GMT')
+            updated_data['Birthdate'] = birthdate_obj.strftime('%Y-%m-%d')
+
 
         # Check if the patient exists
         cur = mysql.connection.cursor()
