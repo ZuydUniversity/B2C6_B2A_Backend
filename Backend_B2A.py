@@ -12,7 +12,7 @@ app = Flask(__name__)
 CORS(app)
 
 # Determine the environment based on an environment variable; default to 'development'
-environment = os.getenv('FLASK_ENV', 'production')
+environment = os.getenv('FLASK_ENV', 'dev')
 
 # Load the configuration from config.json
 with open('config.json') as config_file:
