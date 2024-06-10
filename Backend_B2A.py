@@ -652,6 +652,7 @@ def get_patient_results(patient_id):
         return jsonify(results_list)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
     
 # Get a specific result belonging to a patient
 @app.route('/patients/<int:patient_id>/get_results/<int:result_id>', methods=['GET'])
@@ -668,11 +669,15 @@ def get_patient_result(patient_id, result_id):
         column_names = [desc[0] for desc in cur.description]
         result_dict = dict(zip(column_names, result))
 
+        # Include resultId in the result dictionary
+        result_dict["resultId"] = result_dict.pop("Id")
+
         cur.close()
 
         return jsonify(result_dict)
     except Exception as e:
         return jsonify({"message": "An error occurred"})
+
 
 
 # Delete a result
@@ -1020,10 +1025,10 @@ def update_patient_excercise(patient_id, excercise_id):
         excercise_data = request.get_json()
 
         # Validate excercise data
-        required_fields = ['name', 'description', 'cmas_id']
+        required_fields = ['Left', 'Right', 'Type', 'Gewricht', 'CMASId']
         for field in required_fields:
             if field not in excercise_data:
-                return jsonify({"error": f"{field.capitalize()} is a required field"}), 400
+                return jsonify({"error": f"{field} is a required field"}), 400
 
         # Check if the excercise exists and belongs to the patient
         cur = mysql.connection.cursor()
@@ -1043,8 +1048,8 @@ def update_patient_excercise(patient_id, excercise_id):
 
         # Update excercise for the patient
         cur = mysql.connection.cursor()
-        query = "UPDATE Excercise SET Name = %s, Description = %s, CMASId = %s WHERE Id = %s"
-        cur.execute(query, (excercise_data['name'], excercise_data['description'], excercise_data['cmas_id'], excercise_id))
+        query = "UPDATE Excercise SET `Left` = %s, `Right` = %s, Type = %s, Gewricht = %s, CMASId = %s WHERE Id = %s"
+        cur.execute(query, (excercise_data['Left'], excercise_data['Right'], excercise_data['Type'], excercise_data['Gewricht'], excercise_data['CMASId'], excercise_id))
         mysql.connection.commit()
         cur.close()
 
@@ -1052,6 +1057,7 @@ def update_patient_excercise(patient_id, excercise_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 # Delete a patient's excercise
 @app.route('/patients/<int:patient_id>/excercises/<int:excercise_id>', methods=['DELETE'])
