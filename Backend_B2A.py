@@ -164,26 +164,7 @@ def register():
     else:
         return "", 400
 
-@app.route("/forgotpassword", methods=["POST"])
-def forgot():  
-    try:
-        email = request.json["email"]
-        emailUsed = emailCheck(email)
-
-        if(emailUsed == -1):
-            return "", 500
-        
-        if(emailUsed == 1):
-            password = request.json["password"]
-            cursor = mysql.connection.cursor()
-            cursor.execute('''UPDATE User SET Password = %s WHERE Email = %s''', (password, email))
-            mysql.connection.commit()
-            cursor.close()
-            return "", 200
-        else:
-            return "", 400 
-    except Exception as e:
-            return "", 500  
+ 
 
 
 @app.route("/send_password_reset_email", methods=["POST"])
