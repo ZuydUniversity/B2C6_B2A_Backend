@@ -5,15 +5,24 @@ from fpdf import FPDF
 import base64
 import io
 import logging
+import json  # Import the json module
+import os
 
 app = Flask(__name__)
 CORS(app)
 
+# Determine the environment based on an environment variable; default to 'development'
+environment = os.getenv('FLASK_ENV', 'production')
 
-app.config['MYSQL_HOST'] = '20.16.87.228'
-app.config['MYSQL_USER'] = 'Userb2a'
-app.config['MYSQL_PASSWORD'] = 'DitIsEchtHeelLeukBlok3006'
-app.config['MYSQL_DB'] = 'your_database_name'
+# Load the configuration from config.json
+with open('config.json') as config_file:
+    config = json.load(config_file)
+
+# Use the loaded configuration for the specified environment to set up your app
+app.config['MYSQL_HOST'] = config[environment]['MYSQL_HOST']
+app.config['MYSQL_USER'] = config[environment]['MYSQL_USER']
+app.config['MYSQL_PASSWORD'] = config[environment]['MYSQL_PASSWORD']
+app.config['MYSQL_DB'] = config[environment]['MYSQL_DB']
 mysql = MySQL(app)
 
 logging.basicConfig(level=logging.DEBUG)
