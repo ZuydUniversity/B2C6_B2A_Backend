@@ -149,15 +149,6 @@ def forgot():
     except Exception as e:
             return "", 500  
 
-
-
-
-
-
-
-
-
-
 #   --------------------------
 #   |   User API Functions   |   
 #   -------------------------- 
@@ -1270,127 +1261,150 @@ def download_research_result_pdf(patient_id, result_id):
 #   |   Appointments API Functions   |   
 #   ----------------------------------
 
+# Only use this endpoint for prototype purposes 
+# It retrieves all appointments and associating user data 
+# This can severly impact your DB if the DB is a large production DB
 @app.route('/appointment/get_all', methods=['GET'])
 def get_all_appointments():
     try:
         cur = mysql.connection.cursor()
-        query = "SELECT * FROM Appointment"
+        query = """
+                SELECT a.Id as AppointmentId, a.Date, a.Description, a.Location,
+                        u.Id as UserId, u.Name, u.Lastname
+                FROM appointments a
+                JOIN Appointment_Users au ON a.Id = au.AppointmentId
+                JOIN users u ON au.UserId = u.Id
+            """
         cur.execute(query)
         appointments = cur.fetchall()
-
-        if not appointments:
+       
+        if not data:
             return jsonify([]), 200
-        
-        appointment_list = [dict(zip([desc[0] for desc in cur.description], row)) for row in appointments]
+
+        appointments = defaultdict(lambda: {
+            'Date': '',
+            'Description': '',
+            'Location': '',
+            'participants': {}
+        })
+
+        for row in data:
+            appointment_id = row['AppointmentId']
+            if not appointments[appointment_id]['Date']:
+                appointments[appointment_id].update({
+                    'Date': row['Date'],
+                    'Description': row['Description'],
+                    'Location': row['Location']
+                })
+            user_id = row['UserId']
+            appointments[appointment_id]['participants'][user_id] = {
+                'name': row['Name'],
+                'lastname': row['Lastname']
+            }
+
+        appointments = dict(appointments)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
         if 'cur' in locals():
             cur.close()
-    return jsonify(appointment_list)
+    return jsonify(appointments), 200
 
 @app.route('/user/<int:user_id>/appointment', methods=['GET'])
 def get_all_user_appointments(user_id):
     try:
         cur = mysql.connection.cursor()
         query = """
-                SELECT * 
-                FROM Appointment a 
-                JOIN AppointmentUser au on a.id = au.appointmentId 
-                WHERE au.userId = %s
+                SELECT a.Id as AppointmentId, a.Date, a.Description, a.Location,
+                        u.Id as UserId, u.Name, u.Lastname
+                FROM appointments a
+                JOIN Appointment_Users au ON a.Id = au.AppointmentId
+                JOIN users u ON au.UserId = u.Id
+                WHERE au.UserId = %s
                 """
         cur.execute(query, (user_id,))
         appointments = cur.fetchall()
-
-        if not appointments:
+       
+        if not data:
             return jsonify([]), 200
-             
-        appointment_list = [dict(zip([desc[0] for desc in cur.description], row)) for row in appointments]
+
+        appointments = defaultdict(lambda: {
+            'Date': '',
+            'Description': '',
+            'Location': '',
+            'participants': {}
+        })
+
+        for row in data:
+            appointment_id = row['AppointmentId']
+            if not appointments[appointment_id]['Date']:
+                appointments[appointment_id].update({
+                    'Date': row['Date'],
+                    'Description': row['Description'],
+                    'Location': row['Location']
+                })
+            user_id = row['UserId']
+            appointments[appointment_id]['participants'][user_id] = {
+                'name': row['Name'],
+                'lastname': row['Lastname']
+            }
+
+        appointments = dict(appointments)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
         if 'cur' in locals():
             cur.close()
-    return jsonify(appointment_list)    
-
-@app.route('/doctor/<int:doctor_id>/appointment', methods=['GET'])
-def get_all_doctor_appointments(doctor_id):
-    try:
-        cur = mysql.connection.cursor()
-        query = """
-                SELECT * 
-                FROM Appointment a 
-                WHERE a.DoctorId = %s
-                """
-        cur.execute(query, (doctor_id,))
-        appointments = cur.fetchall()
-
-        if not appointments:
-            return jsonify([]), 200
-             
-        appointment_list = [dict(zip([desc[0] for desc in cur.description], row)) for row in appointments]
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        if 'cur' in locals():
-            cur.close()
-    return jsonify(appointment_list)    
-
-@app.route('/patient/<int:patient_id>/appointment', methods=['GET'])
-def get_all_patient_appointments(patient_id):
-    try:
-        cur = mysql.connection.cursor()
-        query = """
-                SELECT * 
-                FROM Appointment a 
-                WHERE a.PatientId = %s
-                """
-        cur.execute(query, (patient_id,))
-        appointments = cur.fetchall()
-
-        if not appointments:
-            return jsonify([]), 200
-             
-        appointment_list = [dict(zip([desc[0] for desc in cur.description], row)) for row in appointments]
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        if 'cur' in locals():
-            cur.close()
-    return jsonify(appointment_list) 
+    return jsonify(appointments), 200
 
 @app.route('/appointment/create', methods=['POST'])
 def create_appointment():
     try:
+        """Appointment data is expected to be:
+        {
+            'date': '10-06-2024',
+            'description': 'CMAS afspraak',
+            'participants': [1, 3]
+        }
+        """
         appointment_data = request.get_json()
 
         # Validate appointment data
-        required_fields = ['patient_id', 'doctor_id', 'date', 'description']
-        missing_fields = [field for field in required_fields if field not in appointment_data]
+        required_fields = ['date', 'description', 'participants']
+        missing_fields = [field for field in required_fields if field not in appointment_data or (field == 'participants' and not appointment_data.get('participants'))]
         if missing_fields:
             return jsonify({"error": f"Missing required appointment data: {', '.join(missing_fields)}"}), 400
 
-        # Check if the patient & doctor exist
-        cur = mysql.connection.cursor()
-        cur.execute("SELECT * FROM patient WHERE Id = %s AND Role = '2'", (patient_id,))
-        patient = cur.fetchone()[0] > 0
-        cur.execute("SELECT * FROM doctor WHERE Id = %s AND Role = '1'", (doctor_id,))
-        doctor = cur.fetchone()[0] > 0
+        # Check if all participants exist
+        participants_exist = True
+        for participant_id in appointment_data.get('participants', []):
+            cur.execute("SELECT * FROM user WHERE Id = %s", (participant_id,))
+            participant = cur.fetchone()
+            if not participant:
+                participants_exist = False
+                break
 
-        if not patient and not doctor:
-            return jsonify({"error": "Patient and Doctor not found"}), 404
-        if not patient:
-            return jsonify({"error": "Patient not found"}), 404
-        if not doctor:
-            return jsonify({"error": "Doctor not found"}), 404
+        if not participants_exist:
+            return jsonify({"error": "One or more participants not found"}), 404
 
         # Add appointment
         cur = mysql.connection.cursor()
         cur.execute("""
-                    INSERT INTO Appointment (PatientId, DoctorId, Date, Description) 
-                    VALUES (%s, %s, %s, %s)
+                    INSERT INTO Appointment (Date, Description) 
+                    VALUES (%s, %s)
                     """, 
-                    (appointment_data['patient_id'], appointment_data['doctor_id'], appointment_data['date'], appointment_data['description']))
+                    (appointment_data['date'], appointment_data['description']))
+        mysql.connection.commit()
+
+        cur.execute("SELECT LAST_INSERT_ID()")
+        appointment_id = cur.fetchone()[0]
+
+        for participant in appointment_data.get('participants'):
+            cur.execute("""
+                        INSERT into Appointment_Users (UserId, AppointmentId)
+                        VALUES (%s, %s)
+                        """,
+                        (participant, appointment_id))
         mysql.connection.commit()
 
     except Exception as e:
@@ -1398,30 +1412,46 @@ def create_appointment():
     finally:
         if 'cur' in locals():
             cur.close()
-    return jsonify({"message": "Appointment added successfully"})
+    return jsonify({"message": "Appointment added successfully"}), 200
 
-@app.route('appointment/<int:appointment_id>/update', methods=['PUT'])
+@app.route('/appointment/<int:appointment_id>/update', methods=['PUT'])
 def update_appointment(appointment_id):
     try:
+        """Appointment data is expected to be:
+        {
+            'date': '10-06-2024',
+            'description': 'CMAS afspraak',
+            'participants': [1, 3]
+        }
+        """
         appointment_data = request.get_json()
+        cur = mysql.connection.cursor()
 
         # Validate appointment data
-        required_fields = ['patient_id', 'doctor_id', 'date', 'description']
-        missing_fields = [field for field in required_fields if field not in appointment_data]
+        required_fields = ['appointment_id', 'date', 'description', 'participants']
+        missing_fields = [field for field in required_fields if field not in appointment_data or (field == 'participants' and not appointment_data.get('participants'))]
         if missing_fields:
             return jsonify({"error": f"Missing required appointment data: {', '.join(missing_fields)}"}), 400
 
+        # Check if all participants exist
+        participants_exist = True
+        for participant_id in appointment_data.get('participants', []):
+            cur.execute("SELECT * FROM user WHERE Id = %s", (participant_id,))
+            participant = cur.fetchone()
+            if not participant:
+                participants_exist = False
+                break
+
+        if not participants_exist:
+            return jsonify({"error": "One or more participants not found"}), 404
 
         # Check if the appointment exist
-        cur = mysql.connection.cursor()
         cur.execute("SELECT * FROM Appointment WHERE Id = %s", (appointment_id,))
         appointment = cur.fetchone()[0] > 0
-
         if not appointment:
             return jsonify({"error": "Appointment not found"}), 404
 
         # Update appointment
-        cur = mysql.connection.cursor()
         cur.execute("""
                     UPDATE Appointment 
                     SET PatientId = %s, DoctorId = %s, Date = %s, Description = %s 
@@ -1430,43 +1460,66 @@ def update_appointment(appointment_id):
                     (appointment_data['patient_id'], appointment_data['doctor_id'], appointment_data['date'], appointment_data['description'], appointment_id))
         mysql.connection.commit()
 
+        # Retrieve existing participants
+        cur.execute("SELECT UserId FROM Appointment_Users WHERE AppointmentId = %s", (appointment_id,))
+        existing_participants = set(row[0] for row in cur.fetchall())
+
+        # Identify participants
+        new_participants = set(appointment_data['participants'])
+        participants_to_add = new_participants - existing_participants
+        participants_to_remove = existing_participants - new_participants
+
+        for participant_id in participants_to_add:
+            cur.execute("INSERT INTO Appointment_Users (AppointmentId, UserId) VALUES (%s, %s)", (appointment_id, participant_id))
+
+        for participant_id in participants_to_remove:
+            cur.execute("DELETE FROM Appointment_Users WHERE AppointmentId = %s AND UserId = %s", (appointment_id, participant_id))
+
+        mysql.connection.commit()
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
         if 'cur' in locals():
             cur.close()
-    return jsonify({"message": "Appointment updated successfully"})
+    return jsonify({"message": "Appointment updated successfully"}), 200
 
-@app.route('appointment/<int:appointment_id>/delete', methods=['DELETE'])
+@app.route('/appointment/<int:appointment_id>/delete', methods=['DELETE'])
 def delete_appointment(appointment_id):
     try:
         # Check if appointment exists
         cur = mysql.connection.cursor()
-        cur.execute("SELECT * FROM Appointment WHERE AppointmentId = %s", (appointment_id,))
+        cur.execute("SELECT * FROM Appointment WHERE Id = %s", (appointment_id,))
         appointment = cur.fetchone()
 
         if not appointment:
             return jsonify({"error": "Appointment not found"}), 404
 
-        # Delete appointment
-        cur = mysql.connection.cursor()
+        cur.execute("START TRANSACTION")
+        cur.execute("""
+                    DELETE FROM Appointment_Users
+                    WHERE AppointmentId = %s
+                    """,
+                    (appointment_id,))
         cur.execute("""
                     DELETE FROM Appointment
-                    WHERE AppointmentId = %s
+                    WHERE Id = %s
                     """, 
                     (appointment_id,))
+
         mysql.connection.commit()
     except Exception as e:
+        mysql.connection.rollback()
         return jsonify({'error': str(e)}), 500
     finally:
         if 'cur' in locals():
             cur.close()
-    return jsonify({"message": "Appointment deleted successfully"})
+    return jsonify({"message": "Appointment deleted successfully"}), 200
 
 @app.route('/user/<int:user_id>/appointment/get', methods=['GET'])
 def get_user_appointments(user_id):
     try:
         appointment_data = request.get_json()
+        cur = mysql.connection.cursor()
 
         # Validate appointment data
         required_fields = ['start_date', 'end_date']
@@ -1474,36 +1527,65 @@ def get_user_appointments(user_id):
         if missing_fields:
             return jsonify({"error": f"Missing required appointment data: {', '.join(missing_fields)}"}), 400
 
+        # Validate start and end dates as DateTime
+        date_format = "%Y-%m-%d"
+        for field in required_fields:
+            try:
+                datetime.strptime(appointment_data[field], date_format)
+            except ValueError:
+                return jsonify({"error": f"{field} is not in the correct format. Expected format: {date_format}"}), 400
 
-        # Get all appointments between start and enddate
-        # Get all user data of users connected to appointment - todo
-        cur = mysql.connection.cursor()
+        # Check if user exists in DB
+        cur.execute("SELECT * FROM User WHERE Id = %s", (user_id))
+        user = cur.fetchone()
+
+        if not user:
+            return jsonify({"error": 'User not found'}), 400
+
+        # Get all appointments of user within a certain timeframe
         cur.execute("""
-                    SELECT *
+                    SELECT a.Id as AppointmentId, a.Date, a.Description, a.Location,
+                        u.Id as UserId, u.Name, u.Lastname
                     FROM appointments a
-                    JOIN AppointmentUser au ON a.Id = au.AppointmentId
-                    WHERE au.UserId = %s AND date >= %s AND date <= %s
+                    JOIN Appointment_Users au ON a.Id = au.AppointmentId
+                    JOIN Users u ON au.UserId = u.Id
+                    WHERE au.UserId = %s AND a.date >= %s AND a.date <= %s
                     """, 
-                    (appointment_data['patient_id'], appointment_data['doctor_id'], appointment_data['date'], appointment_data['description']))
-        appointments = cur.fetchall()
+                    (appointment_data['user_id'], appointment_data['start_date'], appointment_data['end_date']))
+        data = cur.fetchall()
 
-        if not appointments:
+        if not data:
             return jsonify([]), 200
 
-        appointment_list = [dict(zip([desc[0] for desc in cur.description], row)) for row in appointments]
+        appointments = defaultdict(lambda: {
+            'Date': '',
+            'Description': '',
+            'Location': '',
+            'participants': {}
+        })
+
+        for row in data:
+            appointment_id = row['AppointmentId']
+            if not appointments[appointment_id]['Date']:
+                appointments[appointment_id].update({
+                    'Date': row['Date'],
+                    'Description': row['Description'],
+                    'Location': row['Location']
+                })
+            user_id = row['UserId']
+            appointments[appointment_id]['participants'][user_id] = {
+                'name': row['Name'],
+                'lastname': row['Lastname']
+            }
+
+        appointments = dict(appointments)
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
         if 'cur' in locals():
             cur.close()
-    return jsonify({"message": "Appointments retrieved successfully"})
-
-@app.route('/patient/<int:patient_id_id>/appointment/<int:month>')
-def get_monthly_appointments_user(patient_id):
-
-@app.route('/doctor/<int:doctor_id>/appointment/<int:month>')
-def get_monthly_appointments_user(doctor_id):
+    return jsonify(appointments), 200
 
 if __name__ == '__main__':  # Uitvoeren
     app.run(debug=True)
