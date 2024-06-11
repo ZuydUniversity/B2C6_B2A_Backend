@@ -4,6 +4,7 @@ from flask_cors import CORS
 from fpdf import FPDF
 from dotenv import load_dotenv
 from datetime import datetime
+from collections import defaultdict
 import base64
 import io
 import logging
@@ -1270,14 +1271,14 @@ def get_all_appointments():
     try:
         cur = mysql.connection.cursor()
         query = """
-                SELECT a.Id as AppointmentId, a.Date, a.Description, a.Location,
+                SELECT a.Id as AppointmentId, a.Date, a.Description,
                         u.Id as UserId, u.Name, u.Lastname
                 FROM Appointment a
-                JOIN Appointment-Users au ON a.Id = au.AppointmentId
-                JOIN Users u ON au.UserId = u.Id
+                JOIN `Appointment-Users` au ON a.Id = au.AppointmentId
+                JOIN User u ON au.UserId = u.Id
                 """
         cur.execute(query)
-        appointments = cur.fetchall()
+        data = cur.fetchall()
        
         if not data:
             return jsonify([]), 200
@@ -1285,22 +1286,20 @@ def get_all_appointments():
         appointments = defaultdict(lambda: {
             'Date': '',
             'Description': '',
-            'Location': '',
             'participants': {}
         })
 
         for row in data:
-            appointment_id = row['AppointmentId']
+            appointment_id = row[0]
             if not appointments[appointment_id]['Date']:
                 appointments[appointment_id].update({
-                    'Date': row['Date'],
-                    'Description': row['Description'],
-                    'Location': row['Location']
+                    'Date': row[1],
+                    'Description': row[2]
                 })
-            user_id = row['UserId']
+            user_id = row[3]
             appointments[appointment_id]['participants'][user_id] = {
-                'name': row['Name'],
-                'lastname': row['Lastname']
+                'name': row[4],
+                'lastname': row[5]
             }
 
         appointments = dict(appointments)
@@ -1316,15 +1315,20 @@ def get_all_user_appointments(user_id):
     try:
         cur = mysql.connection.cursor()
         query = """
-                SELECT a.Id as AppointmentId, a.Date, a.Description, a.Location,
-                        u.Id as UserId, u.Name, u.Lastname
-                FROM appointments a
-                JOIN Appointment-Users au ON a.Id = au.AppointmentId
-                JOIN users u ON au.UserId = u.Id
-                WHERE au.UserId = %s
+                SELECT a.Id as AppointmentId, a.Date, a.Description,
+                    u.Id as UserId, u.Name, u.Lastname
+                FROM Appointment a
+                JOIN `Appointment-Users` au1 ON a.Id = au1.AppointmentId
+                JOIN User u ON au1.UserId = u.Id
+                WHERE a.Id IN (
+                    SELECT a2.Id
+                    FROM Appointment a2
+                    JOIN `Appointment-Users` au2 ON a2.Id = au2.AppointmentId
+                    WHERE au2.UserId = %s
+                    )
                 """
         cur.execute(query, (user_id,))
-        appointments = cur.fetchall()
+        data = cur.fetchall()
        
         if not data:
             return jsonify([]), 200
@@ -1332,22 +1336,20 @@ def get_all_user_appointments(user_id):
         appointments = defaultdict(lambda: {
             'Date': '',
             'Description': '',
-            'Location': '',
             'participants': {}
         })
 
         for row in data:
-            appointment_id = row['AppointmentId']
+            appointment_id = row[0]
             if not appointments[appointment_id]['Date']:
                 appointments[appointment_id].update({
-                    'Date': row['Date'],
-                    'Description': row['Description'],
-                    'Location': row['Location']
+                    'Date': row[1],
+                    'Description': row[2]
                 })
-            user_id = row['UserId']
+            user_id = row[3]
             appointments[appointment_id]['participants'][user_id] = {
-                'name': row['Name'],
-                'lastname': row['Lastname']
+                'name': row[4],
+                'lastname': row[5]
             }
 
         appointments = dict(appointments)
@@ -1363,9 +1365,9 @@ def create_appointment():
     try:
         """Appointment data is expected to be:
         {
-            'date': '10-06-2024',
-            'description': 'CMAS afspraak',
-            'participants': [1, 3]
+            "date": "10-06-2024",
+            "description": "CMAS afspraak",
+            "participants": [1, 3]
         }
         """
         appointment_data = request.get_json()
@@ -1420,16 +1422,16 @@ def update_appointment(appointment_id):
     try:
         """Appointment data is expected to be:
         {
-            'date': '10-06-2024',
-            'description': 'CMAS afspraak',
-            'participants': [1, 3]
+            "date": "2024-06-11 00:00:00",
+            "description": "CMAS afspraak",
+            "participants": [1, 3]
         }
         """
         appointment_data = request.get_json()
         cur = mysql.connection.cursor()
 
         # Validate appointment data
-        required_fields = ['appointment_id', 'date', 'description', 'participants']
+        required_fields = ['date', 'description', 'participants']
         missing_fields = [field for field in required_fields if field not in appointment_data or (field == 'participants' and not appointment_data.get('participants'))]
         if missing_fields:
             return jsonify({"error": f"Missing required appointment data: {', '.join(missing_fields)}"}), 400
@@ -1437,7 +1439,7 @@ def update_appointment(appointment_id):
         # Check if all participants exist
         participants_exist = True
         for participant_id in appointment_data.get('participants', []):
-            cur.execute("SELECT * FROM user WHERE Id = %s", (participant_id,))
+            cur.execute("SELECT * FROM User WHERE Id = %s", (participant_id,))
             participant = cur.fetchone()
             if not participant:
                 participants_exist = False
@@ -1455,14 +1457,14 @@ def update_appointment(appointment_id):
         # Update appointment
         cur.execute("""
                     UPDATE Appointment 
-                    SET PatientId = %s, DoctorId = %s, Date = %s, Description = %s 
-                    WHERE AppointmentId = %s
+                    SET Date = %s, Description = %s 
+                    WHERE Id = %s
                     """, 
-                    (appointment_data['patient_id'], appointment_data['doctor_id'], appointment_data['date'], appointment_data['description'], appointment_id))
+                    (appointment_data['date'], appointment_data['description'], appointment_id))
         mysql.connection.commit()
 
         # Retrieve existing participants
-        cur.execute("SELECT UserId FROM Appointment-Users WHERE AppointmentId = %s", (appointment_id,))
+        cur.execute("SELECT UserId FROM `Appointment-Users` WHERE AppointmentId = %s", (appointment_id,))
         existing_participants = set(row[0] for row in cur.fetchall())
 
         # Identify participants
@@ -1471,10 +1473,10 @@ def update_appointment(appointment_id):
         participants_to_remove = existing_participants - new_participants
 
         for participant_id in participants_to_add:
-            cur.execute("INSERT INTO Appointment-Users (AppointmentId, UserId) VALUES (%s, %s)", (appointment_id, participant_id))
+            cur.execute("INSERT INTO `Appointment-Users` (AppointmentId, UserId) VALUES (%s, %s)", (appointment_id, participant_id))
 
         for participant_id in participants_to_remove:
-            cur.execute("DELETE FROM Appointment-Users WHERE AppointmentId = %s AND UserId = %s", (appointment_id, participant_id))
+            cur.execute("DELETE FROM `Appointment-Users` WHERE AppointmentId = %s AND UserId = %s", (appointment_id, participant_id))
 
         mysql.connection.commit()
     except Exception as e:
@@ -1497,7 +1499,7 @@ def delete_appointment(appointment_id):
 
         cur.execute("START TRANSACTION")
         cur.execute("""
-                    DELETE FROM Appointment-Users
+                    DELETE FROM `Appointment-Users`
                     WHERE AppointmentId = %s
                     """,
                     (appointment_id,))
@@ -1537,7 +1539,7 @@ def get_user_appointments(user_id):
                 return jsonify({"error": f"{field} is not in the correct format. Expected format: {date_format}"}), 400
 
         # Check if user exists in DB
-        cur.execute("SELECT * FROM User WHERE Id = %s", (user_id))
+        cur.execute("SELECT * FROM User WHERE Id = %s", (user_id,))
         user = cur.fetchone()
 
         if not user:
@@ -1545,42 +1547,39 @@ def get_user_appointments(user_id):
 
         # Get all appointments of user within a certain timeframe
         cur.execute("""
-                    SELECT a.Id as AppointmentId, a.Date, a.Description, a.Location,
+                    SELECT a.Id as AppointmentId, a.Date, a.Description,
                         u.Id as UserId, u.Name, u.Lastname
-                    FROM appointments a
-                    JOIN Appointment-Users au ON a.Id = au.AppointmentId
-                    JOIN Users u ON au.UserId = u.Id
+                    FROM Appointment a
+                    JOIN `Appointment-Users` au ON a.Id = au.AppointmentId
+                    JOIN User u ON au.UserId = u.Id
                     WHERE au.UserId = %s AND a.date >= %s AND a.date <= %s
                     """, 
-                    (appointment_data['user_id'], appointment_data['start_date'], appointment_data['end_date']))
+                    (user_id, appointment_data['start_date'], appointment_data['end_date']))
         data = cur.fetchall()
-
+       
         if not data:
             return jsonify([]), 200
 
         appointments = defaultdict(lambda: {
             'Date': '',
             'Description': '',
-            'Location': '',
             'participants': {}
         })
 
         for row in data:
-            appointment_id = row['AppointmentId']
+            appointment_id = row[0]
             if not appointments[appointment_id]['Date']:
                 appointments[appointment_id].update({
-                    'Date': row['Date'],
-                    'Description': row['Description'],
-                    'Location': row['Location']
+                    'Date': row[1],
+                    'Description': row[2]
                 })
-            user_id = row['UserId']
+            user_id = row[3]
             appointments[appointment_id]['participants'][user_id] = {
-                'name': row['Name'],
-                'lastname': row['Lastname']
+                'name': row[4],
+                'lastname': row[5]
             }
 
         appointments = dict(appointments)
-
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
