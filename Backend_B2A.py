@@ -331,13 +331,21 @@ def update_patient(patient_id):
         # Get the updated data from the request body
         updated_data = request.get_json()
 
-        # Convert Birthdate from 'Wed, 03 Jul 2019 00:00:00 GMT' to 'YYYY-MM-DD'
-        if 'Birthdate' in updated_data:
-            birthdate_str = updated_data['Birthdate']
-            # Assuming the date is always in the format 'Day, DD Mon YYYY HH:MM:SS GMT'
-            birthdate_obj = datetime.strptime(birthdate_str, '%a, %d %b %Y %H:%M:%S GMT')
-            updated_data['Birthdate'] = birthdate_obj.strftime('%Y-%m-%d')
+        print(updated_data)
 
+        # Convert Birthdate from 'Wed Jul 03 2019' to 'YYYY-MM-DD'
+        if 'Birthdate' in updated_data and updated_data['Birthdate']:
+            try:
+                print(f"Original Birthdate: {updated_data['Birthdate']}")
+                birthdate_str = updated_data['Birthdate']
+                # Parse the incoming date string without expecting time or GMT
+                birthdate_obj = datetime.strptime(birthdate_str, '%a %b %d %Y')
+                # Format it to the database's expected format 'YYYY-MM-DD'
+                updated_data['Birthdate'] = birthdate_obj.strftime('%Y-%m-%d')
+                print(f"Formatted Birthdate for DB: {updated_data['Birthdate']}")
+            except ValueError as e:
+                print(f"Error parsing Birthdate: {e}")
+                # Handle the error appropriately, maybe set Birthdate to None or use a default value
 
         # Check if the patient exists
         cur = mysql.connection.cursor()
@@ -354,8 +362,12 @@ def update_patient(patient_id):
         query = "UPDATE User SET "
         values = []
         for key, value in updated_data.items():
-            query += f"{key} = %s, "
-            values.append(value)
+            if value:  # Skip fields with empty values
+                query += f"{key} = %s, "
+                values.append(value)
+        if not values:  # If no values to update, return a message
+            return jsonify({"message": "No information updated due to empty values"})
+
         query = query[:-2]  # Remove the trailing comma and space
         query += " WHERE Id = %s"
         values.append(patient_id)
@@ -424,9 +436,10 @@ def add_medication(patient_id):
         medication_data = request.get_json()
 
         # Validate medication data
-        required_fields = ['name', 'dosage', 'start_date', 'frequency']
+        required_fields = ['Name', 'Dose', 'Start_date', 'Frequency']
         for field in required_fields:
             if field not in medication_data:
+                print(f"Missing required field: {field}")  # Log missing field
                 return jsonify({"error": f"{field.capitalize()} is a required field"}), 400
 
         # Check if the patient exists
@@ -441,16 +454,19 @@ def add_medication(patient_id):
 
         # Add medication for the patient
         cur = mysql.connection.cursor()
-        query = "INSERT INTO Medication (PatientId, Name, Dosage, StartDate, Frequency) VALUES (%s, %s, %s, %s, %s)"
-        cur.execute(query, (patient_id, medication_data['name'], medication_data['dosage'], medication_data['start_date'], medication_data['frequency']))
+        query = "INSERT INTO Medication (PatientId, Name, Dose, Start_date, Frequency) VALUES (%s, %s, %s, %s, %s)"
+        cur.execute(query, (patient_id, medication_data['Name'], medication_data['Dose'], medication_data['Start_date'], medication_data['Frequency']))
+        
+        # After executing the insert query
+        new_medication_id = cur.lastrowid  # This is an example; the exact method depends on your database adapter
         mysql.connection.commit()
         cur.close()
 
-        return jsonify({"message": "Medication added successfully"})
+        return jsonify({"message": "Medication added successfully", "newId": new_medication_id})
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
+    
 # Update medication for a patient
 @app.route('/patients/<int:patient_id>/medication/<int:medication_id>', methods=['PUT'])
 def update_medication(patient_id, medication_id):
@@ -458,10 +474,23 @@ def update_medication(patient_id, medication_id):
         medication_data = request.get_json()
 
         # Validate medication data
-        required_fields = ['name', 'dosage', 'start_date', 'frequency']
+        required_fields = ['Name', 'Dose', 'Start_date', 'Frequency']
         for field in required_fields:
             if field not in medication_data:
+                print(f"Missing required field: {field}")  # Log missing field
                 return jsonify({"error": f"{field.capitalize()} is a required field"}), 400
+
+        # Parse and format Start_date
+        try:
+            received_date_str = medication_data['Start_date']
+            received_date = datetime.strptime(received_date_str, '%a, %d %b %Y %H:%M:%S GMT')
+            formatted_date = received_date.strftime('%Y-%m-%d')
+            medication_data['Start_date'] = formatted_date
+        except ValueError as e:
+            response = jsonify({"error": "Incorrect date format for Start_date. Expected format: 'Thu, 16 May 2024 00:00:00 GMT'"}), 400
+        else:
+            # Proceed with the formatted_date for further processing
+            response = jsonify({"formatted_date": formatted_date})
 
         # Check if the medication exists and belongs to the patient
         cur = mysql.connection.cursor()
@@ -475,8 +504,8 @@ def update_medication(patient_id, medication_id):
 
         # Update medication for the patient
         cur = mysql.connection.cursor()
-        query = "UPDATE Medication SET Name = %s, Dosage = %s, StartDate = %s, Frequency = %s WHERE Id = %s"
-        cur.execute(query, (medication_data['name'], medication_data['dosage'], medication_data['start_date'], medication_data['frequency'], medication_id))
+        query = "UPDATE Medication SET Name = %s, Dose = %s, Start_date = %s, Frequency = %s WHERE Id = %s"
+        cur.execute(query, (medication_data['Name'], medication_data['Dose'], medication_data['Start_date'], medication_data['Frequency'], medication_id))
         mysql.connection.commit()
         cur.close()
 
@@ -545,38 +574,64 @@ def add_diagnosis(patient_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# Update a diagnosis for a patient
 @app.route('/patients/<int:patient_id>/diagnosis/<int:diagnosis_id>', methods=['PUT'])
 def update_diagnosis(patient_id, diagnosis_id):
     try:
+        print("Starting update_diagnosis function")
         diagnosis_data = request.get_json()
+        print(f"Received diagnosis data: {diagnosis_data}")
 
         # Validate diagnosis data
-        required_fields = ['doctor_id', 'diagnosis', 'description', 'date']
+        required_fields = ['DoctorId', 'Diagnosis', 'Description', 'Date']
         for field in required_fields:
             if field not in diagnosis_data:
+                print(f"Missing required field: {field}")  # Log missing field
                 return jsonify({"error": f"{field.capitalize()} is a required field"}), 400
+
+        # Parse and format the date
+        try:
+            print(f"Attempting to parse date: {diagnosis_data['Date']}")
+            # Attempt to parse the date with the first expected format
+            received_date = datetime.strptime(diagnosis_data['Date'], '%a, %d %b %Y %H:%M:%S GMT')
+            print(f"Date parsed successfully with first format: {received_date}")
+        except ValueError:
+            try:
+                print("Attempting to parse date with second expected format")
+                # If the first format fails, attempt with the second expected format
+                received_date = datetime.strptime(diagnosis_data['Date'], '%Y-%m-%d')
+                print(f"Date parsed successfully with second format: {received_date}")
+            except ValueError:
+                print("Failed to parse date with both expected formats")
+                # If both formats fail, return an error message
+                return jsonify({"error": "Incorrect date format. Expected formats: 'Fri, 29 Mar 2024 00:00:00 GMT' or '2024-03-20'"}), 400
+
+        # If parsing is successful, format the datetime object to the desired format for the database
+        formatted_date = received_date.strftime('%Y-%m-%d')
+        diagnosis_data['Date'] = formatted_date  # Update the date in diagnosis_data with the formatted date
+        print(f"Formatted date: {formatted_date}")
 
         # Check if the diagnosis exists and belongs to the patient
         cur = mysql.connection.cursor()
         query = "SELECT * FROM Diagnosis WHERE Id = %s AND PatientId = %s"
+        print(f"Executing query to check diagnosis existence: {query}")
         cur.execute(query, (diagnosis_id, patient_id))
         diagnosis = cur.fetchone()
-        cur.close()
-
         if not diagnosis:
+            print("Diagnosis not found for this patient")
             return jsonify({"error": "Diagnosis not found for this patient"}), 404
 
         # Update diagnosis for the patient
-        cur = mysql.connection.cursor()
         query = "UPDATE Diagnosis SET DoctorId = %s, Diagnosis = %s, Description = %s, Date = %s WHERE Id = %s"
-        cur.execute(query, (diagnosis_data['doctor_id'], diagnosis_data['diagnosis'], diagnosis_data['description'], diagnosis_data['date'], diagnosis_id))
+        print(f"Updating diagnosis with data: {diagnosis_data}")  # Log updating diagnosis
+        cur.execute(query, (diagnosis_data['DoctorId'], diagnosis_data['Diagnosis'], diagnosis_data['Description'], diagnosis_data['Date'], diagnosis_id))
         mysql.connection.commit()
+        print("Diagnosis updated successfully")  # Log successful update
         cur.close()
 
         return jsonify({"message": "Diagnosis updated successfully"})
 
     except Exception as e:
+        print(f"Error occurred: {e}")  # Log any exceptions
         return jsonify({"error": str(e)}), 500
 
       
