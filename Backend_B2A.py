@@ -139,7 +139,6 @@ def register():
         elif accountType == "Researcher":
             role = 4
             
-        employeeNumber = form_data["employeeNumber"]
         specialization = form_data["specialization"]
         gender = form_data["gender"]
         birthDate = form_data["birthDate"]
@@ -154,7 +153,7 @@ def register():
         
         cursor = mysql.connection.cursor()
         try:
-            cursor.execute('''INSERT INTO User (Role, Email, Password, Name, Lastname, Employee_number, Specialization, Gender, Birthdate, Phone_number, Photo, Contactperson_email, Contactperson_name, Contactperson_phone_number) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)''', (role, email, password, firstName, lastName, employeeNumber, specialization, gender, birthDate, phoneNumber, photo_data, contact_email, contact_name, contact_phone,))
+            cursor.execute('''INSERT INTO User (Role, Email, Password, Name, Lastname, Specialization, Gender, Birthdate, Phone_number, Photo, Contactperson_email, Contactperson_name, Contactperson_phone_number) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)''', (role, email, password, firstName, lastName, specialization, gender, birthDate, phoneNumber, photo_data, contact_email, contact_name, contact_phone,))
             mysql.connection.commit()
             cursor.close()
             return "", 200
