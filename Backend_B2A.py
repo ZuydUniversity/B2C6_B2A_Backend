@@ -144,6 +144,7 @@ def register():
         birthDate = form_data["birthDate"]
         phoneNumber = form_data["phoneNumber"]
         contact_name = form_data["contact_name"]
+        contact_lastname = form_data["contact_lastname"]
         contact_email = form_data["contact_email"]
         contact_phone = form_data["contact_phone"]
         photo_data = None
@@ -153,7 +154,7 @@ def register():
         
         cursor = mysql.connection.cursor()
         try:
-            cursor.execute('''INSERT INTO User (Role, Email, Password, Name, Lastname, Specialization, Gender, Birthdate, Phone_number, Photo, Contactperson_email, Contactperson_name, Contactperson_phone_number) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)''', (role, email, password, firstName, lastName, specialization, gender, birthDate, phoneNumber, photo_data, contact_email, contact_name, contact_phone,))
+            cursor.execute('''INSERT INTO User (Role, Email, Password, Name, Lastname, Specialization, Gender, Birthdate, Phone_number, Photo, Contactperson_email, Contactperson_name, Contactperson_lastname, Contactperson_phone_number) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)''', (role, email, password, firstName, lastName, specialization, gender, birthDate, phoneNumber, photo_data, contact_email, contact_name, contact_lastname, contact_phone,))
             mysql.connection.commit()
             cursor.close()
             return "", 200
@@ -165,7 +166,7 @@ def register():
 
  
 
-
+## DOES NOT WORK ON SCHOOL INTERNET!!!!!!!!!!!!!!!!!!!!
 @app.route("/send_password_reset_email", methods=["POST"])
 def send_password_reset_email():
     email = request.json["email"]
