@@ -327,11 +327,11 @@ def get_patient(patient_id):
 # Update patient information
 @app.route('/update_patient/<int:patient_id>', methods=['PUT'])
 def update_patient(patient_id):
+    print("Starting update_patient function")
     try:
         # Get the updated data from the request body
         updated_data = request.get_json()
-
-        print(updated_data)
+        print("Received updated data:", updated_data)
 
         # Convert Birthdate from 'Wed Jul 03 2019' to 'YYYY-MM-DD'
         if 'Birthdate' in updated_data and updated_data['Birthdate']:
@@ -348,6 +348,7 @@ def update_patient(patient_id):
                 # Handle the error appropriately, maybe set Birthdate to None or use a default value
 
         # Check if the patient exists
+        print("Checking if patient exists in the database")
         cur = mysql.connection.cursor()
         query = "SELECT * FROM User WHERE Id = %s AND Role = '2'"
         cur.execute(query, (patient_id,))
@@ -355,9 +356,11 @@ def update_patient(patient_id):
         cur.close()
 
         if not patient:
+            print("Patient not found")
             return jsonify({"error": "Patient not found"}), 404
 
         # Update the patient's information
+        print("Updating patient information in the database")
         cur = mysql.connection.cursor()
         query = "UPDATE User SET "
         values = []
@@ -366,6 +369,7 @@ def update_patient(patient_id):
                 query += f"{key} = %s, "
                 values.append(value)
         if not values:  # If no values to update, return a message
+            print("No information updated due to empty values")
             return jsonify({"message": "No information updated due to empty values"})
 
         query = query[:-2]  # Remove the trailing comma and space
@@ -375,9 +379,11 @@ def update_patient(patient_id):
         mysql.connection.commit()
         cur.close()
 
+        print("Patient information updated successfully")
         return jsonify({"message": "Patient information updated successfully"})
 
     except Exception as e:
+        print(f"An error occurred: {e}")
         return jsonify({"error": str(e)}), 500
     
 # delete a patient
@@ -540,39 +546,31 @@ def delete_medication(patient_id, medication_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
-# Add a diagnosis for a patient
 @app.route('/patients/<int:patient_id>/diagnosis', methods=['POST'])
 def add_diagnosis(patient_id):
-    try:
-        diagnosis_data = request.get_json()
+    diagnosis_data = request.get_json()
 
-        # Validate diagnosis data
-        required_fields = ['doctor_id', 'diagnosis', 'description', 'date']
-        for field in required_fields:
-            if field not in diagnosis_data:
-                return jsonify({"error": f"{field.capitalize()} is a required field"}), 400
+    required_fields = ['DoctorId', 'Diagnosis', 'Description', 'Date']
+    for field in required_fields:
+        if field not in diagnosis_data:
+            return jsonify({"error": f"{field.capitalize()} is a required field"}), 400
 
-        # Check if the patient exists
-        cur = mysql.connection.cursor()
-        query = "SELECT * FROM User WHERE Id = %s AND Role = '2'"
-        cur.execute(query, (patient_id,))
-        patient = cur.fetchone()
-        cur.close()
+    cur = mysql.connection.cursor()
+    query = "SELECT * FROM User WHERE Id = %s AND Role = '2'"
+    cur.execute(query, (patient_id,))
+    patient = cur.fetchone()
+    cur.close()
 
-        if not patient:
-            return jsonify({"error": "Patient not found"}), 404
+    if not patient:
+        return jsonify({"error": "Patient not found"}), 404
 
-        # Add diagnosis for the patient
-        cur = mysql.connection.cursor()
-        query = "INSERT INTO Diagnosis (PatientId, DoctorId, Diagnosis, Description, Date) VALUES (%s, %s, %s, %s, %s)"
-        cur.execute(query, (patient_id, diagnosis_data['doctor_id'], diagnosis_data['diagnosis'], diagnosis_data['description'], diagnosis_data['date']))
-        mysql.connection.commit()
-        cur.close()
+    cur = mysql.connection.cursor()
+    query = "INSERT INTO Diagnosis (PatientId, DoctorId, Diagnosis, Description, Date) VALUES (%s, %s, %s, %s, %s)"
+    cur.execute(query, (patient_id, diagnosis_data['DoctorId'], diagnosis_data['Diagnosis'], diagnosis_data['Description'], diagnosis_data['Date']))
+    mysql.connection.commit()
+    cur.close()
 
-        return jsonify({"message": "Diagnosis added successfully"})
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    return jsonify({"message": "Diagnosis added successfully"})
 
 @app.route('/patients/<int:patient_id>/diagnosis/<int:diagnosis_id>', methods=['PUT'])
 def update_diagnosis(patient_id, diagnosis_id):
