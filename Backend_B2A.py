@@ -10,12 +10,10 @@ import io
 import logging
 import os
 
-
 load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
-
 
 app.config['MYSQL_USER'] = os.getenv('MYSQL_USER')
 app.config['MYSQL_PASSWORD'] = os.getenv('MYSQL_PASSWORD')
