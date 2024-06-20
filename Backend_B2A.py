@@ -1448,7 +1448,8 @@ def update_appointment(appointment_id):
 
         # Check if the appointment exist
         cur.execute("SELECT * FROM Appointment WHERE Id = %s", (appointment_id,))
-        appointment = cur.fetchone()[0] > 0
+        result = cur.fetchone()[0]
+        appointment = result > 0
         if not appointment:
             return jsonify({"error": "Appointment not found"}), 404
 
