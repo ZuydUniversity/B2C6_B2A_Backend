@@ -1,5 +1,19 @@
 # python -m unittest test_Backend_B2A.py
 
+# 1. Import necessary modules and classes: unittest for testing, mock_open and patch for mocking.
+# 2. Define a test class inheriting from unittest.TestCase.
+# 3. Inside the test class, define two test methods:
+#    a. test_default_dev_environment_configuration:
+#       - Create a mock configuration for the 'dev' environment.
+#       - Mock the open function to return this mock configuration when called.
+#       - Use patch to mock the os.getenv function to return "dev".
+#       - Reload the Backend_B2A module to apply the mocked configuration.
+#       - Assert that the app's configuration matches the mocked 'dev' environment configuration.
+#    b. test_production_environment_configuration (incomplete in the provided code).
+# 4. Use patch and mock_open to simulate different configurations based on the environment.
+# 5. Reload the module under test to apply the mocked configurations.
+# 6. Assert that the application's configuration matches the expected values for each environment.
+
 import unittest
 from unittest.mock import mock_open, patch
 from Backend_B2A import app  # Assuming the provided code is in Backend_B2A.py
