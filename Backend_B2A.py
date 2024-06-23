@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, send_file, session
+from flask import Flask, jsonify, request, send_file
 from flask_mysqldb import MySQL
 from flask_cors import CORS
 from fpdf import FPDF
@@ -9,20 +9,15 @@ import logging
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired
 from flask_mail import Mail, Message
 import os
-from dotenv import load_dotenv
-
-
+from imgurpython import ImgurClient
+import tempfile
 
 load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY")
 CORS(app, supports_credentials=True)
 
-
-
-
-app.config['SESSION_COOKIE_SAMESITE'] = "None"
-app.config['SESSION_COOKIE_SECURE'] = True
+imgurClient = ImgurClient(os.getenv('imgur_client_id'), os.getenv('imgur_client_secret'))
 
 
 
@@ -82,29 +77,19 @@ def login():
         email = request.json["email"]
         password = request.json["password"]
         cursor = mysql.connection.cursor()
-        cursor.execute('''SELECT Role FROM User WHERE Email = %s AND BINARY Password = %s''', (email, password,))
+        cursor.execute('''SELECT Role, Id FROM User WHERE Email = %s AND BINARY Password = %s''', (email, password,))
         result = cursor.fetchone()
         if(result == None):
             return "", 400
         else:
             role = result[0]
-            session["email"] = email
-            return jsonify({"role": role, "email": email}), 200
+            id = result[1]
+            return jsonify({"role": role, "user_id": id}), 200
     except Exception as e:
         app.logger.error(f'Error during login: {e}')
         return "", 500
         
-@app.route("/logout", methods=["POST"])
-def logout():
-    session.pop("email", None)
-    return "", 200
 
-@app.route("/checksession", methods=["POST"])
-def checksession():
-    if "email" in session:
-        return "", 200
-    else:
-        return "", 401
 
 
 def emailCheck(email):
@@ -152,14 +137,22 @@ def register():
         contact_lastname = form_data["contact_lastname"]
         contact_email = form_data["contact_email"]
         contact_phone = form_data["contact_phone"]
-        photo_data = None
+        
+        photo_url = None
         if 'photo' in request.files:
             photo = request.files["photo"]
-            photo_data = photo.read()
-        
+            temp_file = tempfile.NamedTemporaryFile(delete=False)
+            photo.save(temp_file.name)
+            try:
+                uploaded = imgurClient.upload_from_path(temp_file.name, anon=True)
+                photo_url = uploaded['link']
+            finally:
+                temp_file.close()
+                os.unlink(temp_file.name)
+
         cursor = mysql.connection.cursor()
         try:
-            cursor.execute('''INSERT INTO User (Role, Email, Password, Name, Lastname, Specialization, Gender, Birthdate, Phone_number, Photo, Contactperson_email, Contactperson_name, Contactperson_lastname, Contactperson_phone_number) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)''', (role, email, password, firstName, lastName, specialization, gender, birthDate, phoneNumber, photo_data, contact_email, contact_name, contact_lastname, contact_phone,))
+            cursor.execute('''INSERT INTO User (Role, Email, Password, Name, Lastname, Specialization, Gender, Birthdate, Phone_number, Photo, Contactperson_email, Contactperson_name, Contactperson_lastname, Contactperson_phone_number) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)''', (role, email, password, firstName, lastName, specialization, gender, birthDate, phoneNumber, photo_url, contact_email, contact_name, contact_lastname, contact_phone,))
             mysql.connection.commit()
             cursor.close()
             return "", 200
@@ -171,7 +164,7 @@ def register():
 
  
 
-## DOES NOT WORK ON SCHOOL INTERNET!!!!!!!!!!!!!!!!!!!!
+## DOES NOT WORK ON SCHOOL INTERNET!
 @app.route("/send_password_reset_email", methods=["POST"])
 def send_password_reset_email():
     email = request.json["email"]
