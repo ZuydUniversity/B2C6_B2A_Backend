@@ -3,6 +3,8 @@ flask_mysqldb
 flask_cors
 fpdf
 python-dotenv
+pytest
+pytest-mock
 flask_mail
 itsdangerous
 imgurpython
