@@ -16,11 +16,7 @@ app = Flask(__name__)
 CORS(app)
 
 # Determine the environment based on an environment variable; default to 'development'
-environment = os.getenv('FLASK_ENV', 'dev')
-
-# Load the configuration from config.json
-with open('config.json') as config_file:
-    config = json.load(config_file)
+# environment = os.getenv('FLASK_ENV', 'dev')
 
 # Use the loaded configuration for the specified environment to set up your app
 app.config['MYSQL_USER'] = os.getenv('MYSQL_USER')
