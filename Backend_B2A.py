@@ -8,15 +8,23 @@ from collections import defaultdict
 import base64
 from io import BytesIO
 import logging
-from reportlab.pdfgen import canvas
-import json
+from itsdangerous import URLSafeTimedSerializer, SignatureExpired
+from flask_mail import Mail, Message
 import os
-
+from imgurpython import ImgurClient
+import tempfile
+import json  # Import the json module
+from reportlab.pdfgen import canvas
 
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)
+app.secret_key = os.getenv("SECRET_KEY")
+CORS(app, supports_credentials=True)
+
+imgurClient = ImgurClient(os.getenv('imgur_client_id'), os.getenv('imgur_client_secret'))
+
+
 
 
 # Determine the environment based on an environment variable; default to 'development'
@@ -27,7 +35,19 @@ app.config['MYSQL_USER'] = os.getenv('MYSQL_USER')
 app.config['MYSQL_PASSWORD'] = os.getenv('MYSQL_PASSWORD')
 app.config['MYSQL_DB'] = os.getenv('MYSQL_DB')
 app.config['MYSQL_HOST'] = os.getenv('MYSQL_HOST')
+
 mysql = MySQL(app)
+
+app.config['MAIL_SERVER'] = 'smtp.sendgrid.net'
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USERNAME'] = 'apikey'
+app.config['MAIL_PASSWORD'] = os.getenv("MAIL_PASSWORD")
+mail = Mail(app)
+URLserializer = URLSafeTimedSerializer('sdge%t564@57214@#457trh$rt5y')
+
+
+
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -67,14 +87,20 @@ def login():
         email = request.json["email"]
         password = request.json["password"]
         cursor = mysql.connection.cursor()
-        cursor.execute('''SELECT COUNT(*) FROM User WHERE Email = %s AND BINARY Password = %s''', (email, password,))
-        Exists = cursor.fetchone()[0]
-        if(Exists == 0):
+        cursor.execute('''SELECT Role, Id FROM User WHERE Email = %s AND BINARY Password = %s''', (email, password,))
+        result = cursor.fetchone()
+        if(result == None):
             return "", 400
         else:
-            return  "", 200
+            role = result[0]
+            id = result[1]
+            return jsonify({"role": role, "user_id": id}), 200
     except Exception as e:
+        app.logger.error(f'Error during login: {e}')
         return "", 500
+        
+
+
 
 def emailCheck(email):
     try:
@@ -94,12 +120,11 @@ def register():
             form_data[x] = None
 
     email = form_data["email"]
-    emailUsed = emailCheck(email)
+    emailUsed = int(emailCheck(email))
 
     if(emailUsed == -1):
         return "", 500
-    
-    if(emailUsed == 0):
+    elif(emailUsed == 0):
         password = form_data["password"]
         firstName = form_data["firstName"]
         lastName = form_data["lastName"]
@@ -113,49 +138,85 @@ def register():
             role = 3
         elif accountType == "Researcher":
             role = 4
-        employeeNumber = form_data["employeeNumber"]
+            
         specialization = form_data["specialization"]
-        patientNumber = form_data["patientNumber"]
         gender = form_data["gender"]
         birthDate = form_data["birthDate"]
         phoneNumber = form_data["phoneNumber"]
-        photo = request.files["photo"]
         contact_name = form_data["contact_name"]
+        contact_lastname = form_data["contact_lastname"]
         contact_email = form_data["contact_email"]
         contact_phone = form_data["contact_phone"]
-        photo_data = photo.read()
-        cursor = mysql.connection.cursor()
         
+        photo_url = None
+        if 'photo' in request.files:
+            photo = request.files["photo"]
+            temp_file = tempfile.NamedTemporaryFile(delete=False)
+            photo.save(temp_file.name)
+            try:
+                uploaded = imgurClient.upload_from_path(temp_file.name, anon=True)
+                photo_url = uploaded['link']
+            finally:
+                temp_file.close()
+                os.unlink(temp_file.name)
+
+        cursor = mysql.connection.cursor()
         try:
-            cursor.execute('''INSERT INTO User (Role, Email, Password, Name, Lastname, Employee_number, Specialization, Patient_number, Gender, Birthdate, Phone_number, Photo, Contactperson_email, Contactperson_name, Contactperson_phone_number) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)''', (role, email, password, firstName, lastName, employeeNumber, specialization, patientNumber, gender, birthDate, phoneNumber, photo_data, contact_email, contact_name, contact_phone,))
+            cursor.execute('''INSERT INTO User (Role, Email, Password, Name, Lastname, Specialization, Gender, Birthdate, Phone_number, Photo, Contactperson_email, Contactperson_name, Contactperson_lastname, Contactperson_phone_number) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)''', (role, email, password, firstName, lastName, specialization, gender, birthDate, phoneNumber, photo_url, contact_email, contact_name, contact_lastname, contact_phone,))
             mysql.connection.commit()
             cursor.close()
             return "", 200
         except Exception as e:
+            app.logger.error(f'Error during registration: {e}')
             return "", 500       
     else:
         return "", 400
 
-@app.route("/forgotpassword", methods=["POST"])
-def forgot():  
-    try:
-        email = request.json["email"]
-        emailUsed = emailCheck(email)
+ 
 
-        if(emailUsed == -1):
-            return "", 500
-        
-        if(emailUsed == 1):
-            password = request.json["password"]
-            cursor = mysql.connection.cursor()
-            cursor.execute('''UPDATE User SET Password = %s WHERE Email = %s''', (password, email))
-            mysql.connection.commit()
-            cursor.close()
-            return "", 200
-        else:
-            return "", 400 
+## DOES NOT WORK ON SCHOOL INTERNET!
+@app.route("/send_password_reset_email", methods=["POST"])
+def send_password_reset_email():
+    email = request.json["email"]
+    exists = emailCheck(email)
+    if exists == 1:
+        token = URLserializer.dumps(email, salt='ghi3yt7yhg874g89(*uh)')
+        ## have to replace the url with the actual url when using on azure
+        reset_url = f"http://localhost:5173/reset-password/{token}"
+        html = f'<p>Uw link om een nieuwe wachtwoord te maken is: <a href="{reset_url}">Link</a></p>'
+        msg = Message('Nieuwe wachtwoord link', sender='Zuydb2a@proton.me', recipients=[email])
+        msg.body = 'Druk op de link om een nieuwe wachtwoord te maken.'
+        msg.html = html
+        mail.send(msg)
+        return "", 200 
+    elif(exists == 0):
+        return "", 400
+    else:
+        return "", 500
+
+
+@app.route('/reset_password/<token>', methods=['POST'])
+def reset_password(token):
+    try:
+        email = URLserializer.loads(token, salt="ghi3yt7yhg874g89(*uh)", max_age=600)
+    except SignatureExpired:
+        return "", 400
+
+    new_password = request.json["password"]
+
+    try:
+        cursor = mysql.connection.cursor()
+        cursor.execute('''UPDATE User SET Password = %s WHERE Email = %s''', (new_password, email))
+        mysql.connection.commit()
+        cursor.close()
+        return "", 200
     except Exception as e:
-            return "", 500  
+        return "", 500  
+
+
+
+
+
 
 #   --------------------------
 #   |   User API Functions   |   
