@@ -346,6 +346,6 @@ def test_get_user_appointments(client, mocker, user_id, request_body, db_data, u
 
         assert response.status_code == expected_status_code
         assert response.get_json() == expected_response
-
+        
 if __name__ == '__main__':
     pytest.main()
