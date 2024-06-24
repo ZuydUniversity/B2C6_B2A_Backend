@@ -5,3 +5,4 @@ fpdf
 python-dotenv
 pytest
 pytest-mock
+dotenv
