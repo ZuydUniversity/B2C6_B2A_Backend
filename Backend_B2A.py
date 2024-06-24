@@ -1379,50 +1379,53 @@ def get_all_user_appointments(user_id):
     try:
         cur = mysql.connection.cursor()
         query = """
-                SELECT a.Id as AppointmentId, a.Date, a.Description,
-                    u.Id as UserId, u.Name, u.Lastname
-                FROM Appointment a
-                JOIN `Appointment-Users` au1 ON a.Id = au1.AppointmentId
-                JOIN User u ON au1.UserId = u.Id
-                WHERE a.Id IN (
-                    SELECT a2.Id
-                    FROM Appointment a2
-                    JOIN `Appointment-Users` au2 ON a2.Id = au2.AppointmentId
-                    WHERE au2.UserId = %s
-                    )
+                    SELECT a.Id as AppointmentId, a.Date, a.Description,
+                        u.Id as UserId, u.Name, u.Lastname, n.Type as NoteType
+                    FROM Appointment a
+                    JOIN `Appointment-Users` au1 ON a.Id = au1.AppointmentId
+                    JOIN User u ON au1.UserId = u.Id
+                    LEFT JOIN Note n ON a.Id = n.AppointmentId
+                    WHERE a.Id IN (
+                        SELECT a2.Id
+                        FROM Appointment a2
+                        JOIN `Appointment-Users` au2 ON a2.Id = au2.AppointmentId
+                        WHERE au2.UserId = %s
+                        )
                 """
         cur.execute(query, (user_id,))
-        data = cur.fetchall()
-       
+        rows = cur.fetchall()
+        column_names = [desc[0] for desc in cur.description]
+
+        data = [dict(zip(column_names, row)) for row in rows]
+
         if not data:
             return jsonify([]), 200
 
         appointments = defaultdict(lambda: {
             'Date': '',
             'Description': '',
-            'participants': {}
+            'Participants': [],
+            'Note': ''
         })
 
         for row in data:
-            appointment_id = row[0]
-            if not appointments[appointment_id]['Date']:
-                appointments[appointment_id].update({
-                    'Date': row[1],
-                    'Description': row[2]
-                })
-            user_id = row[3]
-            appointments[appointment_id]['participants'][user_id] = {
-                'name': row[4],
-                'lastname': row[5]
-            }
+            appointment_id = row['AppointmentId']
+            appointments[appointment_id]['Date'] = row['Date']
+            appointments[appointment_id]['Description'] = row['Description']
+            
+            participant = {'UserId': row['UserId'], 'Name': row['Name'], 'Lastname': row['Lastname']}
+            if participant not in appointments[appointment_id]['Participants']:
+                appointments[appointment_id]['Participants'].append(participant)
+            
+            # Check for 'NoteType' instead of 'NoteContent' and assign it to 'Note'
+            if 'NoteType' in row and row['NoteType']:
+                appointments[appointment_id]['Note'] = row['NoteType']
 
-        appointments = dict(appointments)
+        appointments_list = list(appointments.values())
+
+        return jsonify(appointments_list), 200
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        if 'cur' in locals():
-            cur.close()
-    return jsonify(appointments), 200
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/appointment/create', methods=['POST'])
 def create_appointment():
