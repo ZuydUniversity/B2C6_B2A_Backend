@@ -5,6 +5,7 @@ from fpdf import FPDF
 from dotenv import load_dotenv
 from datetime import datetime
 from collections import defaultdict
+from reportlab.pdfgen import canvas
 import base64
 import io
 import logging
