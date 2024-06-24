@@ -20,10 +20,10 @@ with open('config.json') as config_file:
     config = json.load(config_file)
 
 # Use the loaded configuration for the specified environment to set up your app
-app.config['MYSQL_HOST'] = config[environment]['MYSQL_HOST']
-app.config['MYSQL_USER'] = config[environment]['MYSQL_USER']
-app.config['MYSQL_PASSWORD'] = config[environment]['MYSQL_PASSWORD']
-app.config['MYSQL_DB'] = config[environment]['MYSQL_DB']
+app.config['MYSQL_USER'] = os.getenv('MYSQL_USER')
+app.config['MYSQL_PASSWORD'] = os.getenv('MYSQL_PASSWORD')
+app.config['MYSQL_DB'] = os.getenv('MYSQL_DB')
+app.config['MYSQL_HOST'] = os.getenv('MYSQL_HOST')
 mysql = MySQL(app)
 
 logging.basicConfig(level=logging.DEBUG)
