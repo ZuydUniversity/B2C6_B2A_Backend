@@ -8,3 +8,4 @@ pytest-mock
 flask_mail
 itsdangerous
 imgurpython
+reportlab
