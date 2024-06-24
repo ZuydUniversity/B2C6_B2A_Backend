@@ -5,16 +5,13 @@ from fpdf import FPDF
 from dotenv import load_dotenv
 from datetime import datetime
 from collections import defaultdict
-from reportlab.pdfgen import canvas
 import base64
-import io
 from io import BytesIO
 import logging
 from reportlab.pdfgen import canvas
+import json
 import os
-import json  # Import the json module
-import os
-from datetime import datetime
+
 
 load_dotenv()
 
