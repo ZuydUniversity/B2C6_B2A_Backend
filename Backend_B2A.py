@@ -1247,7 +1247,6 @@ def download_result_pdf(patient_id, result_id):
         )
 
     except Exception as e:
-        print(f"Fout opgetreden: {str(e)}")
         return jsonify({"message": f"Fout opgetreden: {str(e)}"}), 500
     
 # Function to download a specific research result belonging to a patient
