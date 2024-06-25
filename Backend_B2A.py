@@ -1396,6 +1396,7 @@ def get_all_user_appointments(user_id):
         rows = cur.fetchall()
         column_names = [desc[0] for desc in cur.description]
 
+        # old code but keeping it incase we need to revert
         #data = [dict(zip(column_names, row)) for row in rows]
         data = [{key: row[key] for key in column_names if key in row} for row in rows]
 
