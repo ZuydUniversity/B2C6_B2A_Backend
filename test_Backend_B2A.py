@@ -1,5 +1,5 @@
 import pytest
-from flask import Flask
+from flask import Flask, jsonify
 from collections import defaultdict
 from Backend_B2A import app
 
@@ -78,53 +78,29 @@ def test_get_all_appointments(client, mocker, db_data, expected_response):
         assert response.json == expected_response
 
 @pytest.mark.parametrize(
-    "user_id, db_data, expected_response",
+    "db_data, user_id, expected_response",
     [
         (
-            1,
-            # db_data represents the result set from the query
+            # Case with multiple appointments and participants
             [
-                (1, '2021-01-01', 'Description 1', 1, 'User1', 'Lastname1'),
-                (1, '2021-01-01', 'Description 1', 2, 'User2', 'Lastname2')
+                {'AppointmentId': 1, 'Date': '2024-06-10', 'Description': 'Appointment 1', 'UserId': 1, 'Name': 'User1', 'Lastname': 'Last1', 'NoteType': 'Type1'},
+                {'AppointmentId': 1, 'Date': '2024-06-10', 'Description': 'Appointment 1', 'UserId': 2, 'Name': 'User2', 'Lastname': 'Last2', 'NoteType': 'Type1'},
+                {'AppointmentId': 2, 'Date': '2024-06-11', 'Description': 'Appointment 2', 'UserId': 1, 'Name': 'User1', 'Lastname': 'Last1', 'NoteType': None},
             ],
-            # expected_response represents the JSON response structure
-            {
-                "1": {
-                    'Date': '2021-01-01',
-                    'Description': 'Description 1',
-                    'participants': {
-                        "1": {'name': 'User1', 'lastname': 'Lastname1'},
-                        "2": {'name': 'User2', 'lastname': 'Lastname2'}
-                    }
-                }
-            }
+            1,
+            [
+                {'Date': '2024-06-10', 'Description': 'Appointment 1', 'Participants': [{'UserId': 1, 'Name': 'User1', 'Lastname': 'Last1'}, {'UserId': 2, 'Name': 'User2', 'Lastname': 'Last2'}], 'Note': 'Type1'},
+                {'Date': '2024-06-11', 'Description': 'Appointment 2', 'Participants': [{'UserId': 1, 'Name': 'User1', 'Lastname': 'Last1'}], 'Note': ''}
+            ]
         ),
         (
-            # Empty user_id
-            1,
-            # Empty result set
+            # Case with no appointments
             [],
-            # Expected response for no data
+            1,
             []
-        ),
-        (
-            # Single appointment result set
-            4,
-            [
-                (3, '2021-03-01', 'Description 3', 4, 'User4', 'Lastname4')
-            ],
-            {
-                "3": {
-                    'Date': '2021-03-01',
-                    'Description': 'Description 3',
-                    'participants': {
-                        "4": {'name': 'User4', 'lastname': 'Lastname4'}
-                    }
-                }
-            }
         )
     ],
-    ids=['multiple_appointments', 'no_appointments', 'single_appointment']  
+    ids=['multiple_appointments', 'no_appointments']
 )
 def test_get_all_user_appointments(client, mocker, db_data, user_id, expected_response):
     with app.app_context():
@@ -132,6 +108,7 @@ def test_get_all_user_appointments(client, mocker, db_data, user_id, expected_re
         mock_cursor = mocker.MagicMock()
         mock_cursor.execute.return_value = None
         mock_cursor.fetchall.return_value = db_data
+        mock_cursor.description = [('AppointmentId',), ('Date',), ('Description',), ('UserId',), ('Name',), ('Lastname',), ('NoteType',)]
 
         # Mock mysql connection
         mock_connection = mocker.patch('Backend_B2A.MySQL.connection', autospec=True)
@@ -141,7 +118,7 @@ def test_get_all_user_appointments(client, mocker, db_data, user_id, expected_re
 
         assert response.status_code == 200
         assert response.json == expected_response
-
+        
 @pytest.mark.parametrize(
     "request_body, db_data_participants, db_data_appointment, status_code, expected_response",
     [
