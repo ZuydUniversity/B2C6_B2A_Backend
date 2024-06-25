@@ -1299,6 +1299,99 @@ def get_patient_appointments(patient_id):
         return jsonify(appointments_list)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+#GETs for patient- and doctordashboard
+# Get all notes belonging to a patient
+@app.route('/patients/<int:patient_id>/notes', methods=['GET'])
+def get_patient_notes(patient_id):
+    try:
+        cur = mysql.connection.cursor()
+        query = "SELECT Date, Type FROM Note WHERE Id = %s ORDER BY Date desc"
+        cur.execute(query, (patient_id,))
+        notes = cur.fetchall()
+
+        if not notes:
+            return jsonify({"message": "No notes found for this patient"})
+
+        column_names = [desc[0] for desc in cur.description]
+        cur.close()
+
+        notes_list = [dict(zip(column_names, row)) for row in notes]
+
+        return jsonify(notes_list)
+    except Exception as e:
+        return jsonify({"message": "Error occurred while retrieving notes"})
+
+# Get all notes belonging to a doctor
+@app.route('/patients/<int:patient_id>/doctornotes', methods=['GET'])
+def get_doctor_notes(patient_id):
+    try:
+        cur = mysql.connection.cursor()
+        query = "SELECT Type, Date, Name, Lastname FROM your_database_name.Note INNER JOIN `User` ON Note.Id = `User`.Id WHERE DoctorId = %s ORDER BY Date desc"
+        cur.execute(query, (patient_id,))
+        notes = cur.fetchall()
+
+        if not notes:
+            return jsonify({"message": "No notes found for this doctor"})
+
+        column_names = [desc[0] for desc in cur.description]
+        cur.close()
+
+        doctornotes_list = [dict(zip(column_names, row)) for row in notes]
+
+        return jsonify(doctornotes_list)
+    except Exception as e:
+        return jsonify({"message": "Error occurred while retrieving notes"})
+
+# Get a patient's UPCOMING appointments (limit of 5, desc order)
+@app.route('/patients/<int:patient_id>/upcomingappointments', methods=['GET'])
+def get_patient_upcoming_appointments(patient_id):
+    try:
+        cur = mysql.connection.cursor()
+        query = """
+            SELECT Date, Description 
+            FROM your_database_name.Appointment 
+            INNER JOIN `Appointment-Users` ON Appointment.Id = `Appointment-Users`.AppointmentId 
+            WHERE UserID = %s
+            ORDER BY Date desc
+            LIMIT 5
+        """
+        cur.execute(query, (patient_id,))
+        appointments = cur.fetchall()
+
+        if not appointments:
+            return jsonify({"error": "No appointments found for this user"}), 404
+
+        column_names = [desc[0] for desc in cur.description]
+        cur.close()
+
+        appointments_list = [dict(zip(column_names, row)) for row in appointments]
+
+        return jsonify(appointments_list)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# Get the name of the user, no matter their role
+@app.route('/getuserfirstnamelastname/<int:patient_id>', methods=['GET'])
+def get_user_firstnamelastname(patient_id):
+    try:
+        cur = mysql.connection.cursor()
+        query = "SELECT Name, Lastname FROM User WHERE Id = %s"
+        cur.execute(query, (patient_id,))
+        notes = cur.fetchall()
+
+        if not notes:
+            return jsonify({"message": "No name found for this user"})
+
+        column_names = [desc[0] for desc in cur.description]
+        cur.close()
+
+        firstname_lastname = [dict(zip(column_names, row)) for row in notes]
+
+        return jsonify(firstname_lastname)
+    except Exception as e:
+        return jsonify({"message": "Error occurred while retrieving name"})        
     
 
 # DOWNLOAD FUNCTIONS (PDF) (GONNA NEED SOME SERIOUS TESTING and probably some adjustments to the layout of the pdf)
