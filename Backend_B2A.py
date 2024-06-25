@@ -5,16 +5,27 @@ from fpdf import FPDF
 from dotenv import load_dotenv
 from datetime import datetime
 from collections import defaultdict
-from reportlab.pdfgen import canvas
 import base64
-import io
+from io import BytesIO
 import logging
-import json  # Import the json module
+from itsdangerous import URLSafeTimedSerializer, SignatureExpired
+from flask_mail import Mail, Message
 import os
-from datetime import datetime
+from imgurpython import ImgurClient
+import tempfile
+import json  # Import the json module
+from reportlab.pdfgen import canvas
+
+load_dotenv()
 
 app = Flask(__name__)
-CORS(app)
+app.secret_key = os.getenv("SECRET_KEY")
+CORS(app, supports_credentials=True)
+
+imgurClient = ImgurClient(os.getenv('imgur_client_id'), os.getenv('imgur_client_secret'))
+
+
+
 
 # Determine the environment based on an environment variable; default to 'development'
 # environment = os.getenv('FLASK_ENV', 'dev')
@@ -24,7 +35,19 @@ app.config['MYSQL_USER'] = os.getenv('MYSQL_USER')
 app.config['MYSQL_PASSWORD'] = os.getenv('MYSQL_PASSWORD')
 app.config['MYSQL_DB'] = os.getenv('MYSQL_DB')
 app.config['MYSQL_HOST'] = os.getenv('MYSQL_HOST')
+
 mysql = MySQL(app)
+
+app.config['MAIL_SERVER'] = 'smtp.sendgrid.net'
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USERNAME'] = 'apikey'
+app.config['MAIL_PASSWORD'] = os.getenv("MAIL_PASSWORD")
+mail = Mail(app)
+URLserializer = URLSafeTimedSerializer('sdge%t564@57214@#457trh$rt5y')
+
+
+
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -64,14 +87,20 @@ def login():
         email = request.json["email"]
         password = request.json["password"]
         cursor = mysql.connection.cursor()
-        cursor.execute('''SELECT COUNT(*) FROM User WHERE Email = %s AND BINARY Password = %s''', (email, password,))
-        Exists = cursor.fetchone()[0]
-        if(Exists == 0):
+        cursor.execute('''SELECT Role, Id FROM User WHERE Email = %s AND BINARY Password = %s''', (email, password,))
+        result = cursor.fetchone()
+        if(result == None):
             return "", 400
         else:
-            return  "", 200
+            role = result[0]
+            id = result[1]
+            return jsonify({"role": role, "user_id": id}), 200
     except Exception as e:
+        app.logger.error(f'Error during login: {e}')
         return "", 500
+        
+
+
 
 def emailCheck(email):
     try:
@@ -91,12 +120,11 @@ def register():
             form_data[x] = None
 
     email = form_data["email"]
-    emailUsed = emailCheck(email)
+    emailUsed = int(emailCheck(email))
 
     if(emailUsed == -1):
         return "", 500
-    
-    if(emailUsed == 0):
+    elif(emailUsed == 0):
         password = form_data["password"]
         firstName = form_data["firstName"]
         lastName = form_data["lastName"]
@@ -110,49 +138,85 @@ def register():
             role = 3
         elif accountType == "Researcher":
             role = 4
-        employeeNumber = form_data["employeeNumber"]
+            
         specialization = form_data["specialization"]
-        patientNumber = form_data["patientNumber"]
         gender = form_data["gender"]
         birthDate = form_data["birthDate"]
         phoneNumber = form_data["phoneNumber"]
-        photo = request.files["photo"]
         contact_name = form_data["contact_name"]
+        contact_lastname = form_data["contact_lastname"]
         contact_email = form_data["contact_email"]
         contact_phone = form_data["contact_phone"]
-        photo_data = photo.read()
-        cursor = mysql.connection.cursor()
         
+        photo_url = None
+        if 'photo' in request.files:
+            photo = request.files["photo"]
+            temp_file = tempfile.NamedTemporaryFile(delete=False)
+            photo.save(temp_file.name)
+            try:
+                uploaded = imgurClient.upload_from_path(temp_file.name, anon=True)
+                photo_url = uploaded['link']
+            finally:
+                temp_file.close()
+                os.unlink(temp_file.name)
+
+        cursor = mysql.connection.cursor()
         try:
-            cursor.execute('''INSERT INTO User (Role, Email, Password, Name, Lastname, Employee_number, Specialization, Patient_number, Gender, Birthdate, Phone_number, Photo, Contactperson_email, Contactperson_name, Contactperson_phone_number) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)''', (role, email, password, firstName, lastName, employeeNumber, specialization, patientNumber, gender, birthDate, phoneNumber, photo_data, contact_email, contact_name, contact_phone,))
+            cursor.execute('''INSERT INTO User (Role, Email, Password, Name, Lastname, Specialization, Gender, Birthdate, Phone_number, Photo, Contactperson_email, Contactperson_name, Contactperson_lastname, Contactperson_phone_number) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)''', (role, email, password, firstName, lastName, specialization, gender, birthDate, phoneNumber, photo_url, contact_email, contact_name, contact_lastname, contact_phone,))
             mysql.connection.commit()
             cursor.close()
             return "", 200
         except Exception as e:
+            app.logger.error(f'Error during registration: {e}')
             return "", 500       
     else:
         return "", 400
 
-@app.route("/forgotpassword", methods=["POST"])
-def forgot():  
-    try:
-        email = request.json["email"]
-        emailUsed = emailCheck(email)
+ 
 
-        if(emailUsed == -1):
-            return "", 500
-        
-        if(emailUsed == 1):
-            password = request.json["password"]
-            cursor = mysql.connection.cursor()
-            cursor.execute('''UPDATE User SET Password = %s WHERE Email = %s''', (password, email))
-            mysql.connection.commit()
-            cursor.close()
-            return "", 200
-        else:
-            return "", 400 
+## DOES NOT WORK ON SCHOOL INTERNET!
+@app.route("/send_password_reset_email", methods=["POST"])
+def send_password_reset_email():
+    email = request.json["email"]
+    exists = emailCheck(email)
+    if exists == 1:
+        token = URLserializer.dumps(email, salt='ghi3yt7yhg874g89(*uh)')
+        ## have to replace the url with the actual url when using on azure
+        reset_url = f"http://localhost:5173/reset-password/{token}"
+        html = f'<p>Uw link om een nieuwe wachtwoord te maken is: <a href="{reset_url}">Link</a></p>'
+        msg = Message('Nieuwe wachtwoord link', sender='Zuydb2a@proton.me', recipients=[email])
+        msg.body = 'Druk op de link om een nieuwe wachtwoord te maken.'
+        msg.html = html
+        mail.send(msg)
+        return "", 200 
+    elif(exists == 0):
+        return "", 400
+    else:
+        return "", 500
+
+
+@app.route('/reset_password/<token>', methods=['POST'])
+def reset_password(token):
+    try:
+        email = URLserializer.loads(token, salt="ghi3yt7yhg874g89(*uh)", max_age=600)
+    except SignatureExpired:
+        return "", 400
+
+    new_password = request.json["password"]
+
+    try:
+        cursor = mysql.connection.cursor()
+        cursor.execute('''UPDATE User SET Password = %s WHERE Email = %s''', (new_password, email))
+        mysql.connection.commit()
+        cursor.close()
+        return "", 200
     except Exception as e:
-            return "", 500  
+        return "", 500  
+
+
+
+
+
 
 #   --------------------------
 #   |   User API Functions   |   
@@ -400,7 +464,69 @@ def delete_patient(patient_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
+# gets a user by ID
+@app.route('/get_user/<int:user_id>', methods=['GET'])
+def get_user(user_id):
+    try:
+        cur = mysql.connection.cursor()
+        query = "SELECT * FROM User WHERE Id = %s"
+        cur.execute(query, (user_id,))
+        user = cur.fetchone()
+        column_names = [desc[0] for desc in cur.description] if cur.description else []
+        cur.close()
+        
+        if not user:
+            return jsonify({"error": "User not found"}), 404
 
+        # Convert the result to a dictionary
+        user_dict = dict(zip(column_names, user))
+
+        # Serialize data to handle binary fields
+        serialized_user = serialize_data(user_dict)
+
+        return jsonify(serialized_user)
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# update user by ID
+@app.route('/update_user/<int:user_id>', methods=['POST'])
+def update_user(user_id):
+    try:
+        data = request.get_json()
+        Name = data.get('Name')
+        Lastname = data.get('Lastname')
+        Gender = data.get('Gender')
+        Email = data.get('Email')
+        Phone_number = data.get('Phone_number')
+        AccessibilityMode = data.get('AccessibilityMode')
+        EmailNotifications = data.get('EmailNotifications')
+        
+        # Check if all required fields are provided
+        if not all([Name, Lastname, Gender, Email, Phone_number, AccessibilityMode is not None, EmailNotifications is not None]):
+            return jsonify({"error": "Missing required fields"}), 400
+        
+        cur = mysql.connection.cursor()
+        query = """
+            UPDATE User 
+            SET Name = %s, 
+                Lastname = %s, 
+                Gender = %s, 
+                Email = %s, 
+                Phone_number = %s, 
+                AccessibilityMode = %s, 
+                EmailNotifications = %s 
+            WHERE Id = %s
+        """
+        cur.execute(query, (Name, Lastname, Gender, Email, Phone_number, AccessibilityMode, EmailNotifications, user_id))
+        mysql.connection.commit()
+        cur.close()
+        
+        return jsonify({"success": "User updated successfully"}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
 #   -----------------------------------------
 #   |   Patient Information API Functions   |   
 #   -----------------------------------------
@@ -714,6 +840,7 @@ def get_patient_results(patient_id):
         return jsonify(results_list)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
     
 # Get a specific result belonging to a patient
 @app.route('/patients/<int:patient_id>/get_results/<int:result_id>', methods=['GET'])
@@ -730,11 +857,15 @@ def get_patient_result(patient_id, result_id):
         column_names = [desc[0] for desc in cur.description]
         result_dict = dict(zip(column_names, result))
 
+        # Include resultId in the result dictionary
+        result_dict["resultId"] = result_dict.pop("Id")
+
         cur.close()
 
         return jsonify(result_dict)
     except Exception as e:
         return jsonify({"message": "An error occurred"})
+
 
 
 # Delete a result
@@ -1082,10 +1213,10 @@ def update_patient_excercise(patient_id, excercise_id):
         excercise_data = request.get_json()
 
         # Validate excercise data
-        required_fields = ['name', 'description', 'cmas_id']
+        required_fields = ['Left', 'Right', 'Type', 'Gewricht', 'CMASId']
         for field in required_fields:
             if field not in excercise_data:
-                return jsonify({"error": f"{field.capitalize()} is a required field"}), 400
+                return jsonify({"error": f"{field} is a required field"}), 400
 
         # Check if the excercise exists and belongs to the patient
         cur = mysql.connection.cursor()
@@ -1105,8 +1236,8 @@ def update_patient_excercise(patient_id, excercise_id):
 
         # Update excercise for the patient
         cur = mysql.connection.cursor()
-        query = "UPDATE Excercise SET Name = %s, Description = %s, CMASId = %s WHERE Id = %s"
-        cur.execute(query, (excercise_data['name'], excercise_data['description'], excercise_data['cmas_id'], excercise_id))
+        query = "UPDATE Excercise SET `Left` = %s, `Right` = %s, Type = %s, Gewricht = %s, CMASId = %s WHERE Id = %s"
+        cur.execute(query, (excercise_data['Left'], excercise_data['Right'], excercise_data['Type'], excercise_data['Gewricht'], excercise_data['CMASId'], excercise_id))
         mysql.connection.commit()
         cur.close()
 
@@ -1114,6 +1245,7 @@ def update_patient_excercise(patient_id, excercise_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 # Delete a patient's excercise
 @app.route('/patients/<int:patient_id>/excercises/<int:excercise_id>', methods=['DELETE'])
@@ -1210,70 +1342,98 @@ def download_patient_pdf(patient_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
-# Function to generate a PDF of a specific test result belonging to a patient
-@app.route('/download_test_result_pdf/<int:patient_id>/<int:test_result_id>', methods=['GET'])
-def download_test_result_pdf(patient_id, test_result_id):
+def fetch_from_db(query, params):
+    cur = mysql.connection.cursor()
+    cur.execute(query, params)
+    result = cur.fetchall()
+    column_names = [desc[0] for desc in cur.description] if cur.description else []
+    cur.close()
+    return [dict(zip(column_names, row)) for row in result]
+
+# Route voor het genereren van PDF inclusief oefeningen en notities
+@app.route('/download_result_pdf/<int:patient_id>/<int:result_id>', methods=['GET'])
+def download_result_pdf(patient_id, result_id):
     try:
-        # Check if the patient exists
-        cur = mysql.connection.cursor()
-        query = "SELECT * FROM User WHERE Id = %s AND Role = '2'"
-        cur.execute(query, (patient_id,))
-        patient = cur.fetchone()
-        column_names = [desc[0] for desc in cur.description] if cur.description else []
-        cur.close()
-
+        # Patiëntgegevens ophalen
+        patient_query = "SELECT * FROM User WHERE Id = %s AND Role = '2'"
+        patient = fetch_from_db(patient_query, (patient_id,))
         if not patient:
-            return jsonify({"message": "Patient not found"})
+            return jsonify({"message": "Patiënt niet gevonden"}), 404
 
-        # Check if the test result exists
-        cur = mysql.connection.cursor()
-        query = "SELECT * FROM TestResults WHERE Id = %s AND PatientId = %s"
-        cur.execute(query, (test_result_id, patient_id))
-        test_result = cur.fetchone()
-        column_names = [desc[0] for desc in cur.description] if cur.description else []
-        cur.close()
+        # Resultaatgegevens ophalen
+        result_query = "SELECT * FROM Result WHERE Id = %s AND PatientId = %s"
+        result = fetch_from_db(result_query, (result_id, patient_id))
+        if not result:
+            return jsonify({"message": "Resultaat niet gevonden"}), 404
 
-        if not test_result:
-            return jsonify({"message": "Test result not found"})
+        # Oefeningen ophalen die aan het resultaat van de patiënt zijn gekoppeld
+        exercises_query = """
+            SELECT E.*
+            FROM Excercise E
+            INNER JOIN CMAS C ON E.CMASId = C.Id
+            INNER JOIN Result R ON C.ResultId = R.Id
+            WHERE R.PatientId = %s AND R.Id = %s
+        """
+        exercises = fetch_from_db(exercises_query, (patient_id, result_id))
 
-        # Check if there are any notes attached to the test result
-        cur = mysql.connection.cursor()
-        query = "SELECT * FROM Notes WHERE TestResultId = %s"
-        cur.execute(query, (test_result_id,))
-        notes = cur.fetchall()
-        column_names = [desc[0] for desc in cur.description] if cur.description else []
-        cur.close()
+        # Notities ophalen die aan het resultaat zijn gekoppeld
+        notes_query = "SELECT * FROM Note WHERE ResultId = %s"
+        notes = fetch_from_db(notes_query, (result_id,))
 
-        # Convert the test result and notes to dictionaries
-        test_result_dict = dict(zip(column_names, test_result))
-        notes_list = [dict(zip(column_names, row)) for row in notes]
+        # PDF aanmaken met ReportLab
+        response = BytesIO()
+        c = canvas.Canvas(response, pagesize=(600, 800))
 
-        # Create a PDF
-        pdf = FPDF()
-        pdf.add_page()
-        pdf.set_font("Arial", size=12)
+        # PDF-inhoud schrijven
+        c.setFont("Helvetica", 12)
+        c.drawString(100, 750, "Patiëntgegevens")
+        c.drawString(100, 710, f"Patiëntnaam: {patient[0]['Name']} {patient[0]['Lastname']}")
+        
+        # Datum toevoegen naast de patiëntnaam
+        result_date = result[0]['Date'].strftime('%d-%m-%Y')
+        c.drawString(450, 710, f"Datum: {result_date}")
+        
+        c.line(100, 700, 550, 700)
 
-        # Add a title
-        pdf.cell(200, 10, txt="Test Result Data", ln=True, align='C')
+        # Tabel met oefeningen toevoegen
+        if exercises:
+            c.drawString(100, 690, "Oefeningen:")
+            table_header = ["Type", "Gewricht", "Links", "Rechts"]
+            table_data = [(exercise['Type'], exercise['Gewricht'], exercise['Left'], exercise['Right']) for exercise in exercises]
 
-        # Add test result data
-        for key, value in test_result_dict.items():
-            pdf.cell(200, 10, txt=f"{key}: {value}", ln=True)
+            table_start_x = 100
+            table_start_y = 670
+            row_height = 20
+            col_widths = [150, 150, 100, 100] 
 
-        # Add notes
-        pdf.cell(200, 10, txt="Notes:", ln=True)
-        for note in notes_list:
-            pdf.cell(200, 10, txt=f"- {note['note']}", ln=True)
+            for i, header in enumerate(table_header):
+                c.drawString(table_start_x + sum(col_widths[:i]), table_start_y, header)
 
-        # Save the PDF to a bytes buffer
-        pdf_buffer = io.BytesIO()
-        pdf.output(pdf_buffer)
-        pdf_buffer.seek(0)
+            for i, data in enumerate(table_data):
+                for j, item in enumerate(data):
+                    c.drawString(table_start_x + sum(col_widths[:j]), table_start_y - (i + 1) * row_height, str(item))
 
-        return send_file(pdf_buffer, as_attachment=True, download_name=f'test_result_{test_result_id}_data.pdf', mimetype='application/pdf')
+        if notes:
+            c.drawString(100, table_start_y - (len(table_data) + 3) * row_height, "Notities:")
+            notes_start_y = table_start_y - (len(table_data) + 4) * row_height
+            c.setFont("Helvetica", 12)
+            for i, note in enumerate(notes):
+                if 'Type' in note:
+                    c.drawString(100, notes_start_y - i * row_height, f"- {note['Type']}")
+
+        c.showPage()
+        c.save()
+
+        response.seek(0)
+        return send_file(
+            response,
+            as_attachment=True,
+            download_name=f'result_{result_id}_data.pdf',
+            mimetype='application/pdf'
+        )
 
     except Exception as e:
-        return jsonify({"message": "An error occurred"})
+        return jsonify({"message": f"Fout opgetreden: {str(e)}"}), 500
     
 # Function to download a specific research result belonging to a patient
 @app.route('/download_research_result_pdf/<int:patient_id>/<int:result_id>', methods=['GET'])
