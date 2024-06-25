@@ -378,7 +378,69 @@ def delete_patient(patient_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
+# gets a user by ID
+@app.route('/get_user/<int:user_id>', methods=['GET'])
+def get_user(user_id):
+    try:
+        cur = mysql.connection.cursor()
+        query = "SELECT * FROM User WHERE Id = %s"
+        cur.execute(query, (user_id,))
+        user = cur.fetchone()
+        column_names = [desc[0] for desc in cur.description] if cur.description else []
+        cur.close()
+        
+        if not user:
+            return jsonify({"error": "User not found"}), 404
 
+        # Convert the result to a dictionary
+        user_dict = dict(zip(column_names, user))
+
+        # Serialize data to handle binary fields
+        serialized_user = serialize_data(user_dict)
+
+        return jsonify(serialized_user)
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# update user by ID
+@app.route('/update_user/<int:user_id>', methods=['POST'])
+def update_user(user_id):
+    try:
+        data = request.get_json()
+        Name = data.get('Name')
+        Lastname = data.get('Lastname')
+        Gender = data.get('Gender')
+        Email = data.get('Email')
+        Phone_number = data.get('Phone_number')
+        AccessibilityMode = data.get('AccessibilityMode')
+        EmailNotifications = data.get('EmailNotifications')
+        
+        # Check if all required fields are provided
+        if not all([Name, Lastname, Gender, Email, Phone_number, AccessibilityMode is not None, EmailNotifications is not None]):
+            return jsonify({"error": "Missing required fields"}), 400
+        
+        cur = mysql.connection.cursor()
+        query = """
+            UPDATE User 
+            SET Name = %s, 
+                Lastname = %s, 
+                Gender = %s, 
+                Email = %s, 
+                Phone_number = %s, 
+                AccessibilityMode = %s, 
+                EmailNotifications = %s 
+            WHERE Id = %s
+        """
+        cur.execute(query, (Name, Lastname, Gender, Email, Phone_number, AccessibilityMode, EmailNotifications, user_id))
+        mysql.connection.commit()
+        cur.close()
+        
+        return jsonify({"success": "User updated successfully"}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
 #   -----------------------------------------
 #   |   Patient Information API Functions   |   
 #   -----------------------------------------
