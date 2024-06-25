@@ -22,6 +22,17 @@ jobs:
         pip install pytest
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
+    - name: Create .env file
+      run: |
+        echo "MYSQL_USER=${{ secrets.MYSQL_USER }}" >> .env
+        echo "MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}" >> .env
+        echo "MYSQL_DB=${{ secrets.MYSQL_DB }}" >> .env
+        echo "MYSQL_HOST=${{ secrets.MYSQL_HOST }}" >> .env
+        echo "SECRET_KEY=${{ secrets.SECRET_KEY }}" >> .env
+        echo "MAIL_PASSWORD=${{ secrets.MAIL_PASSWORD }}" >> .env
+        echo "imgur_client_id=${{ secrets.IMGUR_CLIENT_ID }}" >> .env
+        echo "imgur_client_secret=${{ secrets.IMGUR_CLIENT_SECRET }}" >> .env
+
     - name: Test with pytest
       run: |
         pytest
