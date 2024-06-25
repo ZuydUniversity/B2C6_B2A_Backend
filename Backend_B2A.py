@@ -1817,6 +1817,27 @@ def get_user_appointments(user_id):
             cur.close()
     return jsonify(appointments), 200
 
+@app.route('/user/search', methods=['POST'])
+def get_user_by_string():
+    try:
+        data = request.get_json()
+        search_string = f"%{data['search_string']}%"
+        cur = mysql.connection.cursor()
+        cur.execute("""
+                SELECT u.id, u.name, u.lastname
+                FROM User u
+                WHERE u.name LIKE %s OR u.lastname LIKE %s
+                """, (search_string, search_string))
+        data = cur.fetchall()
+        if not data:
+            return jsonify([]), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if 'cur' in locals():
+            cur.close()
+    return jsonify(data), 200
+
 if __name__ == '__main__':  # Uitvoeren
     app.run(debug=True)
 
