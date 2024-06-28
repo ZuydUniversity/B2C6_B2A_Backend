@@ -1844,23 +1844,22 @@ def delete_appointment(appointment_id):
 @app.route('/user/<int:user_id>/appointment/get', methods=['GET'])
 def get_user_appointments(user_id):
     try:
-        appointment_data = request.get_json()
         cur = mysql.connection.cursor()
 
-        # Validate appointment data
-        required_fields = ['start_date', 'end_date']
-        missing_fields = [field for field in required_fields if field not in appointment_data]
-        if missing_fields:
-            return jsonify({"error": f"Missing required appointment data: {', '.join(missing_fields)}"}), 400
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        if not start_date or not end_date:
+            return jsonify({"error": "start_date and end_date are required"}), 400
 
         # Validate start and end dates as DateTime
         date_format = "%Y-%m-%d"
-        for field in required_fields:
-            try:
-                datetime.strptime(appointment_data[field], date_format)
-            except ValueError:
-                return jsonify({"error": f"{field} is not in the correct format. Expected format: {date_format}"}), 400
-
+        try:
+            start_date_obj = datetime.strptime(start_date, date_format)
+            end_date_obj = datetime.strptime(end_date, date_format)
+        except ValueError:
+            return jsonify({"error": f"Dates must be in the format {date_format}"}), 400
+        
         # Check if user exists in DB
         cur.execute("SELECT * FROM User WHERE Id = %s", (user_id,))
         user = cur.fetchone()
@@ -1877,7 +1876,7 @@ def get_user_appointments(user_id):
                     JOIN User u ON au.UserId = u.Id
                     WHERE au.UserId = %s AND a.date >= %s AND a.date <= %s
                     """, 
-                    (user_id, appointment_data['start_date'], appointment_data['end_date']))
+                    (user_id, start_date, end_date))
         data = cur.fetchall()
        
         if not data:
