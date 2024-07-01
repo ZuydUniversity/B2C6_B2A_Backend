@@ -1765,7 +1765,7 @@ def get_appointment(appointment_id):
         
         appointment = {
             'Id': appointment_data[0],
-            'Date': appointment_data[1].strftime('%Y-%m-%d %H:%M:%S'),
+            'Date': appointment_data[1].strftime('%Y-%m-%dT%H:%M:%S'),
             'Description': appointment_data[2],
             'Participants': []
         }
