@@ -14,6 +14,8 @@ import os
 import tempfile
 import json  # Import the json module
 from reportlab.pdfgen import canvas
+import bcrypt
+
 
 load_dotenv()
 
@@ -78,26 +80,44 @@ def serialize_data(data):
         # Return data as is if it's not bytes
         return data
 
+
+def hash_password(password):
+    # Convert the password to bytes
+    password_bytes = password.encode('utf-8')
+    
+    # Generate a salt
+    salt = bcrypt.gensalt()
+    
+    # Hash the password
+    hashed_password = bcrypt.hashpw(password_bytes, salt)
+    
+    # Return the hashed password
+    return hashed_password
+
+
 @app.route("/login", methods=["POST"])
 def login():
     try:
         email = request.json["email"]
         password = request.json["password"]
+        # Hash the incoming password
+        hashed_password = hash_password(password)
         cursor = mysql.connection.cursor()
-        cursor.execute('''SELECT Role, Id FROM User WHERE Email = %s AND BINARY Password = %s''', (email, password,))
+        # Fetch the user's hashed password from the database
+        cursor.execute('''SELECT Role, Id, Password FROM User WHERE Email = %s''', (email,))
         result = cursor.fetchone()
-        if(result == None):
+        if result is None:
             return "", 400
         else:
-            role = result[0]
-            id = result[1]
-            return jsonify({"role": role, "user_id": id}), 200
+            role, user_id, db_hashed_password = result
+            # Compare the hashed passwords (assuming bcrypt)
+            if bcrypt.checkpw(password.encode('utf-8'), db_hashed_password.encode('utf-8')):
+                return jsonify({"role": role, "user_id": user_id}), 200
+            else:
+                return "", 400
     except Exception as e:
         app.logger.error(f'Error during login: {e}')
         return "", 500
-        
-
-
 
 def emailCheck(email):
     try:
@@ -122,7 +142,7 @@ def register():
     if(emailUsed == -1):
         return "", 500
     elif(emailUsed == 0):
-        password = form_data["password"]
+        password = hash_password(form_data["password"])
         firstName = form_data["firstName"]
         lastName = form_data["lastName"]
         accountType = form_data["accountType"]
@@ -198,7 +218,7 @@ def reset_password(token):
     except SignatureExpired:
         return "", 400
 
-    new_password = request.json["password"]
+    new_password = hash_password(request.json["password"])
 
     try:
         cursor = mysql.connection.cursor()

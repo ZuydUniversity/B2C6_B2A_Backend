@@ -1,6 +1,7 @@
 import pytest
 from flask import Flask, jsonify
 from collections import defaultdict
+from flask import json
 from Backend_B2A import app
 
 @pytest.fixture
@@ -324,6 +325,46 @@ def test_get_user_appointments(client, mocker, user_id, request_params, db_data,
         assert response.status_code == expected_status_code
         assert response.get_json() == expected_response
 
+#Function needs to have the email and password created in the database, so it can be tested
+def test_login_success(client):
+    with app.app_context():
+        # Mock data for successful login
+        email = "backendtest@mail.nl"
+        password = "123"
+
+        response = client.post("/login", json={"email": email, "password": password})
+        print(response.status_code)
+        # Check for success
+        assert response.status_code == 200
+
+
+def test_login_failure_wrong_password(client):
+    with app.app_context():
+        # Mock data for login with wrong password
+        email = "backendtest@mail.nl"
+        password = "wrong_password"
         
+        response = client.post("/login", json={"email": email, "password": password})
+        # Check for failure due to wrong password
+        assert response.status_code == 400
+
+def test_login_failure_no_user(client):
+    with app.app_context():
+        # Mock data for login attempt with email not in database
+        email = "nonexistent@example.com"
+        password = "any_password"
+        response = client.post("/login", json={"email": email, "password": password})
+        # Check for failure due to non-existent user
+        assert response.status_code == 400
+
+def test_login_exception_handling(client):
+    with app.app_context():
+        # Mock data that would cause an exception, e.g., malformed JSON
+        response = client.post("/login", data="not_json")
+
+        # Check for internal server error handling
+        assert response.status_code == 500
+
+
 if __name__ == '__main__':
     pytest.main()
