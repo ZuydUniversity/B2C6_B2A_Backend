@@ -1735,6 +1735,53 @@ def create_appointment():
             cur.close()
     return jsonify({"message": "Appointment added successfully"}), 200
 
+@app.route('/appointment/get/<int:appointment_id>', methods=['GET'])
+def get_appointment(appointment_id):
+    try:
+        cur = mysql.connection.cursor()
+        
+        # Fetch the appointment details
+        appointment_query = """
+            SELECT Id, Date, Description
+            FROM Appointment
+            WHERE Id = %s
+        """
+        cur.execute(appointment_query, (appointment_id,))
+        appointment_data = cur.fetchone()
+        
+        if not appointment_data:
+            return jsonify({"error": "Appointment not found"}), 404
+        
+        print(appointment_data)
+        # Fetch the participants
+        participants_query = """
+            SELECT u.Id as UserId, u.Name, u.Lastname
+            FROM User u
+            JOIN `Appointment-Users` au ON u.Id = au.UserId
+            WHERE au.AppointmentId = %s
+        """
+        cur.execute(participants_query, (appointment_id,))
+        participants_data = cur.fetchall()
+        
+        appointment = {
+            'Id': appointment_data[0],
+            'Date': appointment_data[1].strftime('%Y-%m-%d %H:%M:%S'),
+            'Description': appointment_data[2],
+            'Participants': []
+        }
+        
+        for participant in participants_data:
+            participant_info = {'UserId': participant[0], 'Name': participant[1], 'Lastname': participant[2]}
+            appointment['Participants'].append(participant_info)
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if 'cur' in locals():
+            cur.close()
+    
+    return jsonify(appointment), 200
+
 @app.route('/appointment/<int:appointment_id>/update', methods=['PUT'])
 def update_appointment(appointment_id):
     try:
