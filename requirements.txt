@@ -7,5 +7,4 @@ pytest>=8.2.2, <9.0.0
 pytest-mock>=3.14.0, <4.0.0
 flask_mail>=0.10.0, <1.0.0
 itsdangerous>=2.2.0, <3.0.0
-imgurpython>=1.1.7, <2.0.0
 reportlab>=4.2.0, <5.0.0

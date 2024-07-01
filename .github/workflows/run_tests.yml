@@ -30,8 +30,6 @@ jobs:
         echo "MYSQL_HOST=${{ secrets.MYSQL_HOST }}" >> .env
         echo "SECRET_KEY=${{ secrets.SECRET_KEY }}" >> .env
         echo "MAIL_PASSWORD=${{ secrets.MAIL_PASSWORD }}" >> .env
-        echo "imgur_client_id=${{ secrets.IMGUR_CLIENT_ID }}" >> .env
-        echo "imgur_client_secret=${{ secrets.IMGUR_CLIENT_SECRET }}" >> .env
 
     - name: Test with pytest
       run: |

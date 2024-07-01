@@ -11,7 +11,6 @@ import logging
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired
 from flask_mail import Mail, Message
 import os
-from imgurpython import ImgurClient
 import tempfile
 import json  # Import the json module
 from reportlab.pdfgen import canvas
@@ -21,8 +20,6 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY")
 CORS(app, supports_credentials=True)
-
-imgurClient = ImgurClient(os.getenv('imgur_client_id'), os.getenv('imgur_client_secret'))
 
 
 
@@ -149,16 +146,15 @@ def register():
         contact_phone = form_data["contact_phone"]
         
         photo_url = None
-        if 'photo' in request.files:
-            photo = request.files["photo"]
-            temp_file = tempfile.NamedTemporaryFile(delete=False)
-            photo.save(temp_file.name)
-            try:
-                uploaded = imgurClient.upload_from_path(temp_file.name, anon=True)
-                photo_url = uploaded['link']
-            finally:
-                temp_file.close()
-                os.unlink(temp_file.name)
+        # if 'photo' in request.files:
+        #     photo = request.files["photo"]
+        #     temp_file = tempfile.NamedTemporaryFile(delete=False)
+        #     photo.save(temp_file.name)
+        #     try:
+                
+        #     finally:
+        #         temp_file.close()
+        #         os.unlink(temp_file.name)
 
         cursor = mysql.connection.cursor()
         try:
