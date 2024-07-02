@@ -100,12 +100,12 @@ def login():
             return jsonify({"role": role, "user_id": id}), 200
     except Exception as e:
         app.logger.error(f'Error during login: {e}')
-        return "", 500  
-         
+        return "", 500
+
 def emailCheck(email):
     try:
         cursor = mysql.connection.cursor()
-        cursor.execute('''SELECT COUNT(*) FROM User WHERE Email = %s''', (email,)) 
+        cursor.execute('''SELECT COUNT(*) FROM User WHERE Email = %s''', (email,))
         EmailUsed = cursor.fetchone()[0]
         cursor.close()
         return EmailUsed
@@ -138,7 +138,7 @@ def register():
             role = 3
         elif accountType == "Researcher":
             role = 4
-            
+
         specialization = form_data["specialization"]
         gender = form_data["gender"]
         birthDate = form_data["birthDate"]
@@ -147,31 +147,41 @@ def register():
         contact_lastname = form_data["contact_lastname"]
         contact_email = form_data["contact_email"]
         contact_phone = form_data["contact_phone"]
-        
+
         photo_url = None
         # if 'photo' in request.files:
         #     photo = request.files["photo"]
         #     temp_file = tempfile.NamedTemporaryFile(delete=False)
         #     photo.save(temp_file.name)
         #     try:
-                
+
         #     finally:
         #         temp_file.close()
         #         os.unlink(temp_file.name)
 
         cursor = mysql.connection.cursor()
         try:
-            cursor.execute('''INSERT INTO User (Role, Email, Password, Name, Lastname, Specialization, Gender, Birthdate, Phone_number, Photo, Contactperson_email, Contactperson_name, Contactperson_lastname, Contactperson_phone_number) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)''', (role, email, password, firstName, lastName, specialization, gender, birthDate, phoneNumber, photo_url, contact_email, contact_name, contact_lastname, contact_phone,))
+            cursor.execute(
+                '''
+                INSERT INTO User 
+                (Role, Email, Password, Name, Lastname, Specialization, 
+                Gender, Birthdate, Phone_number, Photo, Contactperson_email, 
+                Contactperson_name, Contactperson_lastname, Contactperson_phone_number) 
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ''', 
+                (role, email, password, firstName, 
+                 lastName, specialization, gender, 
+                 birthDate, phoneNumber, photo_url, 
+                 contact_email, contact_name, 
+                 contact_lastname, contact_phone,))
             mysql.connection.commit()
             cursor.close()
             return "", 200
         except Exception as e:
             app.logger.error(f'Error during registration: {e}')
-            return "", 500       
+            return "", 500     
     else:
         return "", 400
-
- 
 
 ## DOES NOT WORK ON SCHOOL INTERNET!
 @app.route("/send_password_reset_email", methods=["POST"])
@@ -187,12 +197,11 @@ def send_password_reset_email():
         msg.body = 'Druk op de link om een nieuwe wachtwoord te maken.'
         msg.html = html
         mail.send(msg)
-        return "", 200 
+        return "", 200
     elif(exists == 0):
         return "", 400
     else:
         return "", 500
-
 
 @app.route('/reset_password/<token>', methods=['POST'])
 def reset_password(token):
@@ -210,12 +219,7 @@ def reset_password(token):
         cursor.close()
         return "", 200
     except Exception as e:
-        return "", 500  
-
-
-
-
-
+        return "", 500
 
 #   --------------------------
 #   |   User API Functions   |   
@@ -244,7 +248,7 @@ def get_doctors():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
+
 # gets a doctor by ID
 @app.route('/get_doctor/<int:doctor_id>', methods=['GET'])
 def get_doctor(doctor_id):
@@ -269,7 +273,7 @@ def get_doctor(doctor_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
+
 # Update doctor information
 @app.route('/update_doctor/<int:doctor_id>', methods=['PUT'])
 def update_doctor(doctor_id):
@@ -338,7 +342,7 @@ def get_patients():
         patients = cur.fetchall()
         column_names = [desc[0] for desc in cur.description] if cur.description else []
         cur.close()
-        
+
         if not patients:
             return jsonify({"error": "No patients found"}), 404
 
@@ -352,7 +356,7 @@ def get_patients():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
+
 # gets a patient by ID
 @app.route('/get_patient/<int:patient_id>', methods=['GET'])
 def get_patient(patient_id):
@@ -377,7 +381,7 @@ def get_patient(patient_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
+
 # Update patient information
 @app.route('/update_patient/<int:patient_id>', methods=['PUT'])
 def update_patient(patient_id):
@@ -439,7 +443,7 @@ def update_patient(patient_id):
     except Exception as e:
         print(f"An error occurred: {e}")
         return jsonify({"error": str(e)}), 500
-    
+
 # delete a patient
 @app.route('/delete_patient/<int:patient_id>', methods=['DELETE'])
 def delete_patient(patient_id):
@@ -500,11 +504,12 @@ def update_user(user_id):
         Phone_number = data.get('Phone_number')
         AccessibilityMode = data.get('AccessibilityMode')
         EmailNotifications = data.get('EmailNotifications')
-        
+
         # Check if all required fields are provided
-        if not all([Name, Lastname, Gender, Email, Phone_number, AccessibilityMode is not None, EmailNotifications is not None]):
+        if not all([Name, Lastname, Gender, Email, Phone_number, 
+                    AccessibilityMode is not None, EmailNotifications is not None]):
             return jsonify({"error": "Missing required fields"}), 400
-        
+
         cur = mysql.connection.cursor()
         query = """
             UPDATE User 
@@ -517,10 +522,12 @@ def update_user(user_id):
                 EmailNotifications = %s 
             WHERE Id = %s
         """
-        cur.execute(query, (Name, Lastname, Gender, Email, Phone_number, AccessibilityMode, EmailNotifications, user_id))
+        cur.execute(query, (Name, Lastname, Gender, Email, 
+                            Phone_number, AccessibilityMode, 
+                            EmailNotifications, user_id))
         mysql.connection.commit()
         cur.close()
-        
+
         return jsonify({"success": "User updated successfully"}), 200
 
     except Exception as e:
@@ -588,7 +595,7 @@ def add_medication(patient_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
+
 # Update medication for a patient
 @app.route('/patients/<int:patient_id>/medication/<int:medication_id>', methods=['PUT'])
 def update_medication(patient_id, medication_id):
@@ -864,8 +871,6 @@ def get_patient_result(patient_id, result_id):
         return jsonify(result_dict)
     except Exception as e:
         return jsonify({"message": "An error occurred"})
-
-
 
 # Delete a result
 @app.route('/delete_result/<int:result_id>', methods=['DELETE'])
@@ -1151,7 +1156,7 @@ def add_patient_excercise():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
+
 # Get a patient's excercises
 @app.route('/patients/<int:patient_id>/excercises', methods=['GET'])
 def get_patient_excercises(patient_id):
@@ -1526,7 +1531,7 @@ def download_result_pdf(patient_id, result_id):
 
     except Exception as e:
         return jsonify({"message": f"Fout opgetreden: {str(e)}"}), 500
-    
+
 # Function to download a specific research result belonging to a patient
 @app.route('/download_research_result_pdf/<int:patient_id>/<int:result_id>', methods=['GET'])
 def download_research_result_pdf(patient_id, result_id):
