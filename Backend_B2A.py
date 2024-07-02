@@ -168,18 +168,18 @@ def register():
                 Gender, Birthdate, Phone_number, Photo, Contactperson_email, 
                 Contactperson_name, Contactperson_lastname, Contactperson_phone_number) 
                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                ''', 
-                (role, email, password, firstName, 
-                 lastName, specialization, gender, 
-                 birthDate, phoneNumber, photo_url, 
-                 contact_email, contact_name, 
+                ''',
+                (role, email, password, firstName,
+                 lastName, specialization, gender,
+                 birthDate, phoneNumber, photo_url,
+                 contact_email, contact_name,
                  contact_lastname, contact_phone,))
             mysql.connection.commit()
             cursor.close()
             return "", 200
         except Exception as e:
             app.logger.error(f'Error during registration: {e}')
-            return "", 500     
+            return "", 500
     else:
         return "", 400
 
@@ -222,8 +222,8 @@ def reset_password(token):
         return "", 500
 
 #   --------------------------
-#   |   User API Functions   |   
-#   -------------------------- 
+#   |   User API Functions   |
+#   --------------------------
 
 # gets all doctors
 @app.route('/get_doctors', methods=['GET'])
@@ -512,18 +512,18 @@ def update_user(user_id):
 
         cur = mysql.connection.cursor()
         query = """
-            UPDATE User 
-            SET Name = %s, 
-                Lastname = %s, 
-                Gender = %s, 
-                Email = %s, 
-                Phone_number = %s, 
-                AccessibilityMode = %s, 
-                EmailNotifications = %s 
+            UPDATE User
+            SET Name = %s,
+                Lastname = %s,
+                Gender = %s,
+                Email = %s,
+                Phone_number = %s,
+                AccessibilityMode = %s,
+                EmailNotifications = %s
             WHERE Id = %s
         """
-        cur.execute(query, (Name, Lastname, Gender, Email, 
-                            Phone_number, AccessibilityMode, 
+        cur.execute(query, (Name, Lastname, Gender, Email,
+                            Phone_number, AccessibilityMode,
                             EmailNotifications, user_id))
         mysql.connection.commit()
         cur.close()
@@ -534,7 +534,7 @@ def update_user(user_id):
         return jsonify({"error": str(e)}), 500
     
 #   -----------------------------------------
-#   |   Patient Information API Functions   |   
+#   |   Patient Information API Functions   |
 #   -----------------------------------------
 
 # Get a patient their medication
@@ -755,7 +755,6 @@ def update_diagnosis(patient_id, diagnosis_id):
         print(f"Error occurred: {e}")  # Log any exceptions
         return jsonify({"error": str(e)}), 500
 
-      
 # Delete a diagnosis for a patient
 @app.route('/patients/<int:patient_id>/diagnosis/<int:diagnosis_id>', methods=['DELETE'])
 def delete_diagnosis(patient_id, diagnosis_id):
@@ -847,7 +846,6 @@ def get_patient_results(patient_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-    
 # Get a specific result belonging to a patient
 @app.route('/patients/<int:patient_id>/get_results/<int:result_id>', methods=['GET'])
 def get_patient_result(patient_id, result_id):
@@ -1034,7 +1032,7 @@ def get_result_notes(result_id):
         return jsonify(notes_list)
     except Exception as e:
         return jsonify({"message": "An error occurred"})
-    
+
 # Delete a note for a specific patient's result
 @app.route('/patient/<int:patient_id>/result/<int:result_id>/delete_note', methods=['DELETE'])
 def delete_note(patient_id, result_id):
@@ -1083,7 +1081,6 @@ def delete_note(patient_id, result_id):
     except Exception as e:
         return jsonify({"message": "An error occurred: {}".format(str(e))})
 
-    
 # Edit a note for a specific patient's result
 @app.route('/patient/<int:patient_id>/result/<int:result_id>/edit_note', methods=['PUT'])
 def edit_note(patient_id, result_id):
@@ -1122,7 +1119,7 @@ def edit_note(patient_id, result_id):
 
     except Exception as e:
         return jsonify({"message": "An error occurred"})
-    
+
 # Create an excercise
 @app.route('/patients/<int:patient_id>/excercise', methods=['POST'])
 def add_patient_excercise():
@@ -1282,7 +1279,7 @@ def delete_patient_excercise(patient_id, excercise_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
+
 # Get a patient's appointments
 @app.route('/patients/<int:patient_id>/appointments', methods=['GET'])
 def get_patient_appointments(patient_id):
@@ -1395,8 +1392,7 @@ def get_user_firstnamelastname(patient_id):
 
         return jsonify(firstname_lastname)
     except Exception as e:
-        return jsonify({"message": "Error occurred while retrieving name"})        
-    
+        return jsonify({"message": "Error occurred while retrieving name"})
 
 # DOWNLOAD FUNCTIONS (PDF) (GONNA NEED SOME SERIOUS TESTING and probably some adjustments to the layout of the pdf)
 
@@ -1421,7 +1417,7 @@ def download_patient_pdf(patient_id):
         pdf = FPDF()
         pdf.add_page()
         pdf.set_font("Arial", size=12)
-        
+
         # Add a title
         pdf.cell(200, 10, txt="Patient Data", ln=True, align='C')
 
@@ -1438,7 +1434,7 @@ def download_patient_pdf(patient_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
+
 def fetch_from_db(query, params):
     cur = mysql.connection.cursor()
     cur.execute(query, params)
@@ -1485,11 +1481,11 @@ def download_result_pdf(patient_id, result_id):
         c.setFont("Helvetica", 12)
         c.drawString(100, 750, "Patiëntgegevens")
         c.drawString(100, 710, f"Patiëntnaam: {patient[0]['Name']} {patient[0]['Lastname']}")
-        
+
         # Datum toevoegen naast de patiëntnaam
         result_date = result[0]['Date'].strftime('%d-%m-%Y')
         c.drawString(450, 710, f"Datum: {result_date}")
-        
+
         c.line(100, 700, 550, 700)
 
         # Tabel met oefeningen toevoegen
@@ -1501,9 +1497,9 @@ def download_result_pdf(patient_id, result_id):
             table_start_x = 100
             table_start_y = 670
             row_height = 20
-            col_widths = [150, 150, 100, 100] 
+            col_widths = [150, 150, 100, 100]
 
-            for i, header in enumerate(table_header):
+            for i, header in enumerate(table_header): 
                 c.drawString(table_start_x + sum(col_widths[:i]), table_start_y, header)
 
             for i, data in enumerate(table_data):
@@ -1581,7 +1577,7 @@ def download_research_result_pdf(patient_id, result_id):
         return jsonify({"message": "An error occurred"})
 
 #   ----------------------------------
-#   |   Appointments API Functions   |   
+#   |   Appointments API Functions   |
 #   ----------------------------------
 
 # Only use this endpoint for prototype purposes 
