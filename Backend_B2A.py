@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from datetime import datetime
 from collections import defaultdict
 import base64
+import io
 from io import BytesIO
 import logging
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired
