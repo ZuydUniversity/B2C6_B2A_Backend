@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, send_file
+from flask import Flask, jsonify, request, send_file, make_response
 from flask_mysqldb import MySQL
 from flask_cors import CORS
 from fpdf import FPDF
@@ -14,6 +14,8 @@ import os
 import tempfile
 import json  # Import the json module
 from reportlab.pdfgen import canvas
+import jwt
+from datetime import datetime, timedelta
 
 load_dotenv()
 
@@ -32,7 +34,6 @@ app.config['MYSQL_USER'] = os.getenv('MYSQL_USER')
 app.config['MYSQL_PASSWORD'] = os.getenv('MYSQL_PASSWORD')
 app.config['MYSQL_DB'] = os.getenv('MYSQL_DB')
 app.config['MYSQL_HOST'] = os.getenv('MYSQL_HOST')
-
 mysql = MySQL(app)
 
 app.config['MAIL_SERVER'] = 'smtp.sendgrid.net'
@@ -78,6 +79,15 @@ def serialize_data(data):
         # Return data as is if it's not bytes
         return data
 
+def create_jwt_token(user_id, user_role):
+    # Token expires in 1 hour or when the session ends
+    payload = {
+        'user_id': user_id,
+        'role': user_role,
+        'exp': datetime.utcnow() + timedelta(hours=1)
+    }
+    return jwt.encode(payload, os.getenv("SECRET_KEY"), algorithm='HS256')
+
 @app.route("/login", methods=["POST"])
 def login():
     try:
@@ -91,13 +101,40 @@ def login():
         else:
             role = result[0]
             id = result[1]
-            return jsonify({"role": role, "user_id": id}), 200
+            token = create_jwt_token(id, role)
+            response = make_response(jsonify({"role": role, "auth_token" : token, "user_id" : id}), 200)
+            return response
     except Exception as e:
         app.logger.error(f'Error during login: {e}')
         return "", 500
         
 
+@app.route("/get_account_info", methods=["POST"])
+def get_account_info():
+    try:
+        data = request.json
+        token = data.get('auth_token')
+        if not token:
+            app.logger.error('Token is missing')
 
+            return jsonify({"error": "Token is missing"}), 401
+        
+        try:
+            payload = jwt.decode(token, os.getenv("SECRET_KEY"), algorithms=['HS256'])
+            user_id = payload['user_id']
+            role = payload['role']
+            return jsonify({"user_id": user_id, "role": role}), 200
+        except jwt.ExpiredSignatureError:
+            app.logger.error('Token has expired')
+
+            return jsonify({"error": "Token has expired"}), 401
+        except jwt.InvalidTokenError:
+            app.logger.error('Invalid token')
+
+            return jsonify({"error": "Invalid token"}), 401
+    except Exception as e:
+        app.logger.error(f'Error during token decoding: {e}')
+        return jsonify({"error": "Internal server error"}), 500
 
 def emailCheck(email):
     try:
