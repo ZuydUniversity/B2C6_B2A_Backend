@@ -84,9 +84,15 @@ def login():
         email = request.json["email"]
         password = request.json["password"]
         cursor = mysql.connection.cursor()
-        cursor.execute('''SELECT Role, Id FROM User WHERE Email = %s AND BINARY Password = %s''', (email, password,))
+        cursor.execute(
+            '''
+            SELECT Role, Id 
+            FROM User WHERE Email = %s 
+            AND BINARY Password = %s
+            '''
+            , (email, password,))
         result = cursor.fetchone()
-        if(result == None):
+        if result is None:
             return "", 400
         else:
             role = result[0]
@@ -94,11 +100,8 @@ def login():
             return jsonify({"role": role, "user_id": id}), 200
     except Exception as e:
         app.logger.error(f'Error during login: {e}')
-        return "", 500
-        
-
-
-
+        return "", 500  
+         
 def emailCheck(email):
     try:
         cursor = mysql.connection.cursor()
@@ -119,9 +122,9 @@ def register():
     email = form_data["email"]
     emailUsed = int(emailCheck(email))
 
-    if(emailUsed == -1):
+    if emailUsed == -1:
         return "", 500
-    elif(emailUsed == 0):
+    elif emailUsed == 0:
         password = form_data["password"]
         firstName = form_data["firstName"]
         lastName = form_data["lastName"]
