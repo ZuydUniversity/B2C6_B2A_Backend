@@ -63,6 +63,7 @@ def before_request_func():
         except Exception as e:
             app.logger.error(f'Error connecting to MySQL: {e}')
             return jsonify({"Error connecting to MySQL": str(e)}), 500
+    return None
 
 def serialize_data(data):
     if isinstance(data, bytes):
@@ -109,7 +110,7 @@ def emailCheck(email):
         EmailUsed = cursor.fetchone()[0]
         cursor.close()
         return EmailUsed
-    except Exception as e:
+    except Exception as e:   # dit kan misschien weg na vragen???
         return -1
 
 @app.route("/register", methods=["POST"])
@@ -198,7 +199,7 @@ def send_password_reset_email():
         msg.html = html
         mail.send(msg)
         return "", 200
-    elif(exists == 0):
+    elif exists == 0:
         return "", 400
     else:
         return "", 500
@@ -219,7 +220,7 @@ def reset_password(token):
         cursor.close()
         return "", 200
     except Exception as e:
-        return "", 500
+        return jsonify({"error": str(e)}), 500
 
 #   --------------------------
 #   |   User API Functions   |
@@ -1881,14 +1882,6 @@ def get_user_appointments(user_id):
         if not start_date or not end_date:
             return jsonify({"error": "start_date and end_date are required"}), 400
 
-        # Validate start and end dates as DateTime
-        date_format = "%Y-%m-%d"
-        try:
-            start_date_obj = datetime.strptime(start_date, date_format)
-            end_date_obj = datetime.strptime(end_date, date_format)
-        except ValueError:
-            return jsonify({"error": f"Dates must be in the format {date_format}"}), 400
-
         # Check if user exists in DB
         cur.execute("SELECT * FROM User WHERE Id = %s", (user_id,))
         user = cur.fetchone()
@@ -1961,4 +1954,3 @@ def get_user_by_string():
 
 if __name__ == '__main__':  # Uitvoeren
     app.run(debug=True)
-
