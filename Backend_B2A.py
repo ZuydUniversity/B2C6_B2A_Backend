@@ -1,16 +1,16 @@
+import os
+import logging
+import base64
+from datetime import datetime
+from collections import defaultdict
+from io import BytesIO
 from flask import Flask, jsonify, request, send_file
 from flask_mysqldb import MySQL
 from flask_cors import CORS
 from fpdf import FPDF
 from dotenv import load_dotenv
-from datetime import datetime
-from collections import defaultdict
-import base64
-from io import BytesIO
-import logging
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired
 from flask_mail import Mail, Message
-import os
 import tempfile
 import json  # Import the json module
 from reportlab.pdfgen import canvas
@@ -110,8 +110,8 @@ def emailCheck(email):
         EmailUsed = cursor.fetchone()[0]
         cursor.close()
         return EmailUsed
-    except Exception as e:   # dit kan misschien weg na vragen???
-        return -1
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/register", methods=["POST"])
 def register():
@@ -627,8 +627,8 @@ def update_medication(patient_id, medication_id):
             formatted_date = received_date.strftime('%Y-%m-%d')
             medication_data['Start_date'] = formatted_date
         except ValueError as e:
-            response = jsonify({"error": "Incorrect date format for Start_date. "
-                             "Expected format: 'Thu, 16 May 2024 00:00:00 GMT'"}), 400
+            response = jsonify({"error": f"Incorrect date format for Start_date. {str(e)} "
+                         "Expected format: 'Thu, 16 May 2024 00:00:00 GMT'"}), 400
         else:
             # Proceed with the formatted_date for further processing
             response = jsonify({"formatted_date": formatted_date})
@@ -892,7 +892,7 @@ def get_patient_result(patient_id, result_id):
 
         return jsonify(result_dict)
     except Exception as e:
-        return jsonify({"message": "An error occurred"})
+        return jsonify({"error": str(e)}), 500
 
 # Delete a result
 @app.route('/delete_result/<int:result_id>', methods=['DELETE'])
@@ -924,7 +924,7 @@ def delete_result(result_id):
         return jsonify({"message": "Result deleted successfully"})
 
     except Exception as e:
-        return jsonify({"message": "An error occurred"})
+        return jsonify({"error": str(e)}), 500
 
 # Add a result for a patient
 @app.route('/patients/<int:patient_id>/add_result', methods=['POST'])
@@ -1003,7 +1003,7 @@ def update_patient_result(patient_id, result_id):
 def add_note(patient_id, result_id):
     try:
         note_text = request.get_json().get('note')
-        doctor_id = request.get_json().get('doctor_id')  
+        doctor_id = request.get_json().get('doctor_id')
         # Assuming you get the doctor's ID from the request
 
         # Check if the patient exists and has the appropriate role
@@ -1060,7 +1060,7 @@ def get_result_notes(result_id):
 
         return jsonify(notes_list)
     except Exception as e:
-        return jsonify({"message": "An error occurred"})
+        return jsonify({"error": str(e)}), 500
 
 # Delete a note for a specific patient's result
 @app.route('/patient/<int:patient_id>/result/<int:result_id>/delete_note', methods=['DELETE'])
@@ -1147,7 +1147,7 @@ def edit_note(patient_id, result_id):
         return jsonify({"message": "Note updated successfully"})
 
     except Exception as e:
-        return jsonify({"message": "An error occurred"})
+        return jsonify({"error": str(e)}), 500
 
 # Create an excercise
 @app.route('/patients/<int:patient_id>/excercise', methods=['POST'])
@@ -1356,7 +1356,7 @@ def get_patient_notes(patient_id):
 
         return jsonify(notes_list)
     except Exception as e:
-        return jsonify({"message": "Error occurred while retrieving notes"})
+        return jsonify({"error": str(e)}), 500
 
 # Get all notes belonging to a doctor
 @app.route('/patients/<int:patient_id>/doctornotes', methods=['GET'])
@@ -1380,7 +1380,7 @@ def get_doctor_notes(patient_id):
 
         return jsonify(doctornotes_list)
     except Exception as e:
-        return jsonify({"message": "Error occurred while retrieving notes"})
+        return jsonify({"error": str(e)}), 500
 
 # Get a patient's UPCOMING appointments (limit of 5, desc order)
 @app.route('/patients/<int:patient_id>/upcomingappointments', methods=['GET'])
@@ -1429,9 +1429,9 @@ def get_user_firstnamelastname(patient_id):
 
         return jsonify(firstname_lastname)
     except Exception as e:
-        return jsonify({"message": "Error occurred while retrieving name"})
+        return jsonify({"error": str(e)}), 500
 
-# DOWNLOAD FUNCTIONS (PDF) 
+# DOWNLOAD FUNCTIONS (PDF)
 # (GONNA NEED SOME SERIOUS TESTING and probably some adjustments to the layout of the pdf)
 
 # Function to generate a PDF of a specific patient's data
@@ -1468,7 +1468,7 @@ def download_patient_pdf(patient_id):
         pdf.output(pdf_buffer)
         pdf_buffer.seek(0)
 
-        return send_file(pdf_buffer, as_attachment=True, 
+        return send_file(pdf_buffer, as_attachment=True,
                          download_name=f'patient_{patient_id}_data.pdf', mimetype='application/pdf')
 
     except Exception as e:
@@ -1544,7 +1544,7 @@ def download_result_pdf(patient_id, result_id):
 
             for i, data in enumerate(table_data):
                 for j, item in enumerate(data):
-                    c.drawString(table_start_x + sum(col_widths[:j]), 
+                    c.drawString(table_start_x + sum(col_widths[:j]),
                                  table_start_y - (i + 1) * row_height, str(item))
 
         if notes:
@@ -1742,7 +1742,7 @@ def create_appointment():
 
         # Validate appointment data
         required_fields = ['date', 'description', 'participants']
-        missing_fields = [field for field in required_fields if field not in appointment_data 
+        missing_fields = [field for field in required_fields if field not in appointment_data
                           or (field == 'participants' and not appointment_data.get('participants'))]
         if missing_fields:
             return jsonify({"error":
@@ -1801,7 +1801,7 @@ def update_appointment(appointment_id):
 
         # Validate appointment data
         required_fields = ['date', 'description', 'participants']
-        missing_fields = [field for field in required_fields if field not in appointment_data 
+        missing_fields = [field for field in required_fields if field not in appointment_data
                           or (field == 'participants' and not appointment_data.get('participants'))]
         if missing_fields:
             return jsonify({"error":
