@@ -193,7 +193,10 @@ def send_password_reset_email():
         token = URLserializer.dumps(email, salt='ghi3yt7yhg874g89(*uh)')
         ## have to replace the url with the actual url when using on azure
         reset_url = f"http://localhost:5173/reset-password/{token}"
-        html = f'<p>Uw link om een nieuwe wachtwoord te maken is: <a href="{reset_url}">Link</a></p>'
+        html = (
+                f'<p>Uw link om een nieuwe wachtwoord te maken is: '
+                f'<a href="{reset_url}">Link</a></p>'
+                )
         msg = Message('Nieuwe wachtwoord link', sender='Zuydb2a@proton.me', recipients=[email])
         msg.body = 'Druk op de link om een nieuwe wachtwoord te maken.'
         msg.html = html
@@ -333,7 +336,7 @@ def delete_doctor(doctor_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
+
 # gets all patients
 @app.route('/get_patients', methods=['GET'])
 def get_patients():
@@ -589,12 +592,12 @@ def add_medication(patient_id):
                 "(PatientId, Name, Dose, Start_date, Frequency) "
                 "VALUES (%s, %s, %s, %s, %s)"
                 )
-        cur.execute(query, 
-                    (patient_id, medication_data['Name'], medication_data['Dose'], 
+        cur.execute(query,
+                    (patient_id, medication_data['Name'], medication_data['Dose'],
                      medication_data['Start_date'], medication_data['Frequency']))
 
         # After executing the insert query
-        new_medication_id = cur.lastrowid  
+        new_medication_id = cur.lastrowid
         # This is an example; the exact method depends on your database adapter
         mysql.connection.commit()
         cur.close()
@@ -624,8 +627,8 @@ def update_medication(patient_id, medication_id):
             formatted_date = received_date.strftime('%Y-%m-%d')
             medication_data['Start_date'] = formatted_date
         except ValueError as e:
-            response = jsonify(
-    {"error": "Incorrect date format for Start_date. Expected format: 'Thu, 16 May 2024 00:00:00 GMT'"}), 400
+            response = jsonify({"error": "Incorrect date format for Start_date. "
+                             "Expected format: 'Thu, 16 May 2024 00:00:00 GMT'"}), 400
         else:
             # Proceed with the formatted_date for further processing
             response = jsonify({"formatted_date": formatted_date})
@@ -642,9 +645,10 @@ def update_medication(patient_id, medication_id):
 
         # Update medication for the patient
         cur = mysql.connection.cursor()
-        query = "UPDATE Medication SET Name = %s, Dose = %s, Start_date = %s, Frequency = %s WHERE Id = %s"
-        cur.execute(query, (medication_data['Name'], medication_data['Dose'], 
-                            medication_data['Start_date'], medication_data['Frequency'], 
+        query = ("UPDATE Medication SET Name = %s, Dose = %s,"
+                 "Start_date = %s, Frequency = %s WHERE Id = %s")
+        cur.execute(query, (medication_data['Name'], medication_data['Dose'],
+                            medication_data['Start_date'], medication_data['Frequency'],
                             medication_id))
         mysql.connection.commit()
         cur.close()
@@ -699,9 +703,10 @@ def add_diagnosis(patient_id):
         return jsonify({"error": "Patient not found"}), 404
 
     cur = mysql.connection.cursor()
-    query = "INSERT INTO Diagnosis (PatientId, DoctorId, Diagnosis, Description, Date) VALUES (%s, %s, %s, %s, %s)"
-    cur.execute(query, (patient_id, diagnosis_data['DoctorId'], 
-                        diagnosis_data['Diagnosis'], diagnosis_data['Description'], 
+    query = ("INSERT INTO Diagnosis (PatientId, DoctorId, Diagnosis, Description, Date)"
+             "VALUES (%s, %s, %s, %s, %s)")
+    cur.execute(query, (patient_id, diagnosis_data['DoctorId'],
+                        diagnosis_data['Diagnosis'], diagnosis_data['Description'],
                         diagnosis_data['Date']))
     mysql.connection.commit()
     cur.close()
@@ -737,11 +742,14 @@ def update_diagnosis(patient_id, diagnosis_id):
             except ValueError:
                 print("Failed to parse date with both expected formats")
                 # If both formats fail, return an error message
-                return jsonify({"error": "Incorrect date format. Expected formats: 'Fri, 29 Mar 2024 00:00:00 GMT' or '2024-03-20'"}), 400
+                return jsonify({"error": "Incorrect date format. Expected formats:"
+                                "'Fri, 29 Mar 2024 00:00:00 GMT' or '2024-03-20'"}), 400
 
-        # If parsing is successful, format the datetime object to the desired format for the database
+        # If parsing is successful, format the datetime
+        # object to the desired format for the database
         formatted_date = received_date.strftime('%Y-%m-%d')
-        diagnosis_data['Date'] = formatted_date  # Update the date in diagnosis_data with the formatted date
+        diagnosis_data['Date'] = formatted_date
+        # Update the date in diagnosis_data with the formatted date
         print(f"Formatted date: {formatted_date}")
 
         # Check if the diagnosis exists and belongs to the patient
@@ -755,9 +763,11 @@ def update_diagnosis(patient_id, diagnosis_id):
             return jsonify({"error": "Diagnosis not found for this patient"}), 404
 
         # Update diagnosis for the patient
-        query = "UPDATE Diagnosis SET DoctorId = %s, Diagnosis = %s, Description = %s, Date = %s WHERE Id = %s"
+        query = ("UPDATE Diagnosis"
+                 "SET DoctorId = %s, Diagnosis = %s, Description = %s, Date = %s"
+                 "WHERE Id = %s")
         print(f"Updating diagnosis with data: {diagnosis_data}")  # Log updating diagnosis
-        cur.execute(query, (diagnosis_data['DoctorId'], diagnosis_data['Diagnosis'], 
+        cur.execute(query, (diagnosis_data['DoctorId'], diagnosis_data['Diagnosis'],
                             diagnosis_data['Description'], diagnosis_data['Date'], diagnosis_id))
         mysql.connection.commit()
         print("Diagnosis updated successfully")  # Log successful update
@@ -940,8 +950,10 @@ def add_patient_result(patient_id):
 
         # Add result for the patient
         cur = mysql.connection.cursor()
-        query = "INSERT INTO Result (PatientId, TestName, ResultValue, Date) VALUES (%s, %s, %s, %s)"
-        cur.execute(query, (patient_id, result_data['test_name'], 
+        query = ("INSERT INTO Result"
+                 "(PatientId, TestName, ResultValue, Date)"
+                 "VALUES (%s, %s, %s, %s)")
+        cur.execute(query, (patient_id, result_data['test_name'],
                             result_data['result_value'], result_data['date']))
         mysql.connection.commit()
         cur.close()
@@ -991,7 +1003,8 @@ def update_patient_result(patient_id, result_id):
 def add_note(patient_id, result_id):
     try:
         note_text = request.get_json().get('note')
-        doctor_id = request.get_json().get('doctor_id')  # Assuming you get the doctor's ID from the request
+        doctor_id = request.get_json().get('doctor_id')  
+        # Assuming you get the doctor's ID from the request
 
         # Check if the patient exists and has the appropriate role
         cur = mysql.connection.cursor()
@@ -1254,7 +1267,9 @@ def update_patient_excercise(patient_id, excercise_id):
 
         # Update excercise for the patient
         cur = mysql.connection.cursor()
-        query = "UPDATE Excercise SET `Left` = %s, `Right` = %s, Type = %s, Gewricht = %s, CMASId = %s WHERE Id = %s"
+        query = ("UPDATE Excercise"
+                 "SET `Left` = %s, `Right` = %s, Type = %s, Gewricht = %s, CMASId = %s"
+                 "WHERE Id = %s")
         cur.execute(query, (excercise_data['Left'], excercise_data['Right'],
                             excercise_data['Type'], excercise_data['Gewricht'],
                             excercise_data['CMASId'], excercise_id))
@@ -1696,7 +1711,9 @@ def get_all_user_appointments(user_id):
             appointments[appointment_id]['Date'] = row['Date']
             appointments[appointment_id]['Description'] = row['Description']
 
-            participant = {'UserId': row['UserId'], 'Name': row['Name'], 'Lastname': row['Lastname']}
+            participant = ({'UserId': row['UserId'],
+                            'Name': row['Name'],
+                            'Lastname': row['Lastname']})
             if participant not in appointments[appointment_id]['Participants']:
                 appointments[appointment_id]['Participants'].append(participant)
 
@@ -1728,7 +1745,8 @@ def create_appointment():
         missing_fields = [field for field in required_fields if field not in appointment_data 
                           or (field == 'participants' and not appointment_data.get('participants'))]
         if missing_fields:
-            return jsonify({"error": f"Missing required appointment data: {', '.join(missing_fields)}"}), 400
+            return jsonify({"error":
+                            f"Missing required appointment data: {', '.join(missing_fields)}"}), 400
 
         # Check if all participants exist
         participants_exist = True
@@ -1786,7 +1804,8 @@ def update_appointment(appointment_id):
         missing_fields = [field for field in required_fields if field not in appointment_data 
                           or (field == 'participants' and not appointment_data.get('participants'))]
         if missing_fields:
-            return jsonify({"error": f"Missing required appointment data: {', '.join(missing_fields)}"}), 400
+            return jsonify({"error":
+                            f"Missing required appointment data: {', '.join(missing_fields)}"}), 400
 
         # Check if all participants exist
         participants_exist = True
@@ -1817,7 +1836,8 @@ def update_appointment(appointment_id):
         mysql.connection.commit()
 
         # Retrieve existing participants
-        cur.execute("SELECT UserId FROM `Appointment-Users` WHERE AppointmentId = %s", (appointment_id,))
+        cur.execute("SELECT UserId FROM `Appointment-Users`"
+                    "WHERE AppointmentId = %s", (appointment_id,))
         existing_participants = set(row[0] for row in cur.fetchall())
 
         # Identify participants
@@ -1826,10 +1846,13 @@ def update_appointment(appointment_id):
         participants_to_remove = existing_participants - new_participants
 
         for participant_id in participants_to_add:
-            cur.execute("INSERT INTO `Appointment-Users` (AppointmentId, UserId) VALUES (%s, %s)", (appointment_id, participant_id))
+            cur.execute("INSERT INTO `Appointment-Users` (AppointmentId, UserId)"
+                        "VALUES (%s, %s)", (appointment_id, participant_id))
 
         for participant_id in participants_to_remove:
-            cur.execute("DELETE FROM `Appointment-Users` WHERE AppointmentId = %s AND UserId = %s", (appointment_id, participant_id))
+            cur.execute("DELETE FROM `Appointment-Users`"
+                        "WHERE AppointmentId = %s"
+                        "AND UserId = %s", (appointment_id, participant_id))
 
         mysql.connection.commit()
     except Exception as e:
