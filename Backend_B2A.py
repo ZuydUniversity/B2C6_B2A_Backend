@@ -17,6 +17,7 @@ import json  # Import the json module
 from reportlab.pdfgen import canvas
 import jwt
 from datetime import datetime, timedelta
+import bcrypt
 
 load_dotenv()
 
@@ -80,6 +81,7 @@ def serialize_data(data):
         # Return data as is if it's not bytes
         return data
 
+
 def create_jwt_token(user_id, user_role):
     # Token expires in 1 hour or when the session ends
     payload = {
@@ -89,26 +91,47 @@ def create_jwt_token(user_id, user_role):
     }
     return jwt.encode(payload, os.getenv("SECRET_KEY"), algorithm='HS256')
 
+
+def hash_password(password):
+    # Convert the password to bytes
+    password_bytes = password.encode('utf-8')
+    
+    # Generate a salt
+    salt = bcrypt.gensalt()
+    
+    # Hash the password
+    hashed_password = bcrypt.hashpw(password_bytes, salt)
+    
+    # Return the hashed password
+    return hashed_password
+
+
+
 @app.route("/login", methods=["POST"])
 def login():
     try:
         email = request.json["email"]
         password = request.json["password"]
+
         cursor = mysql.connection.cursor()
-        cursor.execute('''SELECT Role, Id FROM User WHERE Email = %s AND BINARY Password = %s''', (email, password,))
+        cursor.execute('''SELECT Role, Id, Password FROM User WHERE Email = %s''', (email,))
         result = cursor.fetchone()
-        if(result == None):
+        cursor.close()
+
+        if result is None:
             return "", 400
         else:
-            role = result[0]
-            id = result[1]
-            token = create_jwt_token(id, role)
-            response = make_response(jsonify({"role": role, "auth_token" : token, "user_id" : id}), 200)
-            return response
+            role, user_id, db_hashed_password = result
+            # Compare the hashed passwords (assuming bcrypt)
+            if bcrypt.checkpw(password.encode('utf-8'), db_hashed_password.encode('utf-8')):
+                token = create_jwt_token(user_id, role)
+                response = make_response(jsonify({"role": role, "auth_token": token, "user_id": user_id}), 200)
+                return response
+            else:
+                return "", 400
     except Exception as e:
         app.logger.error(f'Error during login: {e}')
         return "", 500
-        
 
 @app.route("/get_account_info", methods=["POST"])
 def get_account_info():
@@ -117,7 +140,6 @@ def get_account_info():
         token = data.get('auth_token')
         if not token:
             app.logger.error('Token is missing')
-
             return jsonify({"error": "Token is missing"}), 401
         
         try:
@@ -127,11 +149,9 @@ def get_account_info():
             return jsonify({"user_id": user_id, "role": role}), 200
         except jwt.ExpiredSignatureError:
             app.logger.error('Token has expired')
-
             return jsonify({"error": "Token has expired"}), 401
         except jwt.InvalidTokenError:
             app.logger.error('Invalid token')
-
             return jsonify({"error": "Invalid token"}), 401
     except Exception as e:
         app.logger.error(f'Error during token decoding: {e}')
@@ -160,7 +180,7 @@ def register():
     if(emailUsed == -1):
         return "", 500
     elif(emailUsed == 0):
-        password = form_data["password"]
+        password = hash_password(form_data["password"])
         firstName = form_data["firstName"]
         lastName = form_data["lastName"]
         accountType = form_data["accountType"]
@@ -236,7 +256,7 @@ def reset_password(token):
     except SignatureExpired:
         return "", 400
 
-    new_password = request.json["password"]
+    new_password = hash_password(request.json["password"])
 
     try:
         cursor = mysql.connection.cursor()
@@ -1772,6 +1792,53 @@ def create_appointment():
         if 'cur' in locals():
             cur.close()
     return jsonify({"message": "Appointment added successfully"}), 200
+
+@app.route('/appointment/get/<int:appointment_id>', methods=['GET'])
+def get_appointment(appointment_id):
+    try:
+        cur = mysql.connection.cursor()
+        
+        # Fetch the appointment details
+        appointment_query = """
+            SELECT Id, Date, Description
+            FROM Appointment
+            WHERE Id = %s
+        """
+        cur.execute(appointment_query, (appointment_id,))
+        appointment_data = cur.fetchone()
+        
+        if not appointment_data:
+            return jsonify({"error": "Appointment not found"}), 404
+        
+        print(appointment_data)
+        # Fetch the participants
+        participants_query = """
+            SELECT u.Id as UserId, u.Name, u.Lastname
+            FROM User u
+            JOIN `Appointment-Users` au ON u.Id = au.UserId
+            WHERE au.AppointmentId = %s
+        """
+        cur.execute(participants_query, (appointment_id,))
+        participants_data = cur.fetchall()
+        
+        appointment = {
+            'Id': appointment_data[0],
+            'Date': appointment_data[1].strftime('%Y-%m-%dT%H:%M:%S'),
+            'Description': appointment_data[2],
+            'Participants': []
+        }
+        
+        for participant in participants_data:
+            participant_info = {'UserId': participant[0], 'Name': participant[1], 'Lastname': participant[2]}
+            appointment['Participants'].append(participant_info)
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if 'cur' in locals():
+            cur.close()
+    
+    return jsonify(appointment), 200
 
 @app.route('/appointment/<int:appointment_id>/update', methods=['PUT'])
 def update_appointment(appointment_id):
