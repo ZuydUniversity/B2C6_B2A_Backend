@@ -31,14 +31,10 @@ jobs:
         echo "SECRET_KEY=${{ secrets.SECRET_KEY }}" >> .env
         echo "MAIL_PASSWORD=${{ secrets.MAIL_PASSWORD }}" >> .env
   
-    - name: Print .env contents
+    - name: Verify .env file with Python script
       run: |
-        echo "MYSQL_USER=${{ secrets.MYSQL_USER }}"
-        echo "MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}"
-        echo "MYSQL_DB=${{ secrets.MYSQL_DB }}"
-        echo "MYSQL_HOST=${{ secrets.MYSQL_HOST }}"
-        echo "SECRET_KEY=${{ secrets.SECRET_KEY }}"
-        echo "MAIL_PASSWORD=${{ secrets.MAIL_PASSWORD }}"
+        echo "Running check_env.py"
+        python check_env.py
         
     - name: Test with pytest
       run: |
