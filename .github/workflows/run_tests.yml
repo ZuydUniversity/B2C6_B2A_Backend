@@ -24,12 +24,12 @@ jobs:
 
     - name: Create .env file
       run: |
-        echo "MYSQL_USER=${{ secrets.MYSQL_USER }}" >> .env
-        echo "MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}" >> .env
-        echo "MYSQL_DB=${{ secrets.MYSQL_DB }}" >> .env
-        echo "MYSQL_HOST=${{ secrets.MYSQL_HOST }}" >> .env
-        echo "SECRET_KEY=${{ secrets.SECRET_KEY }}" >> .env
-        echo "MAIL_PASSWORD=${{ secrets.MAIL_PASSWORD }}" >> .env
+        echo "MYSQL_USER=${{ secrets.MYSQL_USER }}" > .env
+        echo "MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}" > .env
+        echo "MYSQL_DB=${{ secrets.MYSQL_DB }}" > .env
+        echo "MYSQL_HOST=${{ secrets.MYSQL_HOST }}" > .env
+        echo "SECRET_KEY=${{ secrets.SECRET_KEY }}" > .env
+        echo "MAIL_PASSWORD=${{ secrets.MAIL_PASSWORD }}" > .env
   
     - name: Verify .env file with Python script
       run: |
