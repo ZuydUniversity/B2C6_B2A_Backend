@@ -31,9 +31,15 @@ jobs:
         echo "SECRET_KEY=${{ secrets.SECRET_KEY }}" >> .env
         echo "MAIL_PASSWORD=${{ secrets.MAIL_PASSWORD }}" >> .env
   
-    - name: Display .env file
-      run: cat .env
-
+    - name: Print .env contents
+      run: |
+        echo "MYSQL_USER=${{ secrets.MYSQL_USER }}"
+        echo "MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}"
+        echo "MYSQL_DB=${{ secrets.MYSQL_DB }}"
+        echo "MYSQL_HOST=${{ secrets.MYSQL_HOST }}"
+        echo "SECRET_KEY=${{ secrets.SECRET_KEY }}"
+        echo "MAIL_PASSWORD=${{ secrets.MAIL_PASSWORD }}"
+        
     - name: Test with pytest
       run: |
         pytest
