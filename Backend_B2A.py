@@ -85,13 +85,13 @@ def serialize_data(data):
 def hash_password(password):
     # Convert the password to bytes
     password_bytes = password.encode('utf-8')
-    
+
     # Generate a salt
     salt = bcrypt.gensalt()
-    
+
     # Hash the password
     hashed_password = bcrypt.hashpw(password_bytes, salt)
-    
+
     # Return the hashed password
     return hashed_password
 
@@ -1451,46 +1451,6 @@ def get_user_firstnamelastname(patient_id):
 # DOWNLOAD FUNCTIONS (PDF)
 # (GONNA NEED SOME SERIOUS TESTING and probably some adjustments to the layout of the pdf)
 
-# Function to generate a PDF of a specific patient's data
-@app.route('/download_patient_pdf/<int:patient_id>', methods=['GET'])
-def download_patient_pdf(patient_id):
-    try:
-        cur = mysql.connection.cursor()
-        query = "SELECT * FROM User WHERE Id = %s AND Role = '2'"
-        cur.execute(query, (patient_id,))
-        patient = cur.fetchone()
-        column_names = [desc[0] for desc in cur.description] if cur.description else []
-        cur.close()
-
-        if not patient:
-            return jsonify({"error": "Patient not found"}), 404
-
-        # Convert the result to a dictionary
-        patient_dict = dict(zip(column_names, patient))
-
-        # Create a PDF
-        pdf = FPDF()
-        pdf.add_page()
-        pdf.set_font("Arial", size=12)
-
-        # Add a title
-        pdf.cell(200, 10, txt="Patient Data", ln=True, align='C')
-
-        # Add patient data
-        for key, value in patient_dict.items():
-            pdf.cell(200, 10, txt=f"{key}: {value}", ln=True, align='L')
-
-        # Save the PDF to a bytes buffer
-        pdf_buffer = io.BytesIO()
-        pdf.output(pdf_buffer)
-        pdf_buffer.seek(0)
-
-        return send_file(pdf_buffer, as_attachment=True,
-                         download_name=f'patient_{patient_id}_data.pdf', mimetype='application/pdf')
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
 def fetch_from_db(query, params):
     cur = mysql.connection.cursor()
     cur.execute(query, params)
@@ -1585,56 +1545,6 @@ def download_result_pdf(patient_id, result_id):
 
     except Exception as e:
         return jsonify({"message": f"Fout opgetreden: {str(e)}"}), 500
-
-# Function to download a specific research result belonging to a patient
-@app.route('/download_research_result_pdf/<int:patient_id>/<int:result_id>', methods=['GET'])
-def download_research_result_pdf(patient_id, result_id):
-    try:
-        # Check if the patient exists
-        cur = mysql.connection.cursor()
-        query = "SELECT * FROM User WHERE Id = %s AND Role = '2'"
-        cur.execute(query, (patient_id,))
-        patient = cur.fetchone()
-        column_names = [desc[0] for desc in cur.description] if cur.description else []
-        cur.close()
-
-        if not patient:
-            return jsonify({"message": "Patient not found"})
-
-        # Check if the research result exists
-        cur = mysql.connection.cursor()
-        query = "SELECT * FROM ResearchResults WHERE Id = %s AND PatientId = %s"
-        cur.execute(query, (result_id, patient_id))
-        research_result = cur.fetchone()
-        column_names = [desc[0] for desc in cur.description] if cur.description else []
-        cur.close()
-
-        if not research_result:
-            return jsonify({"message": "Research result not found"})
-
-        # Create a PDF
-        pdf = FPDF()
-        pdf.add_page()
-        pdf.set_font("Arial", size=12)
-
-        # Add a title
-        pdf.cell(200, 10, txt="Research Result Data", ln=True, align='C')
-
-        # Add research result data
-        for key, value in dict(zip(column_names, research_result)).items():
-            pdf.cell(200, 10, txt=f"{key}: {value}", ln=True)
-
-        # Save the PDF to a bytes buffer
-        pdf_buffer = io.BytesIO()
-        pdf.output(pdf_buffer)
-        pdf_buffer.seek(0)
-
-        return send_file(pdf_buffer, as_attachment=True,
-                         download_name=f'research_result_{result_id}_data.pdf',
-                           mimetype='application/pdf')
-
-    except Exception as e:
-        return jsonify({"message": "An error occurred"})
 
 #   ----------------------------------
 #   |   Appointments API Functions   |
@@ -1807,7 +1717,7 @@ def create_appointment():
 def get_appointment(appointment_id):
     try:
         cur = mysql.connection.cursor()
-        
+
         # Fetch the appointment details
         appointment_query = """
             SELECT Id, Date, Description
@@ -1816,10 +1726,10 @@ def get_appointment(appointment_id):
         """
         cur.execute(appointment_query, (appointment_id,))
         appointment_data = cur.fetchone()
-        
+
         if not appointment_data:
             return jsonify({"error": "Appointment not found"}), 404
-        
+
         print(appointment_data)
         # Fetch the participants
         participants_query = """
@@ -1830,16 +1740,20 @@ def get_appointment(appointment_id):
         """
         cur.execute(participants_query, (appointment_id,))
         participants_data = cur.fetchall()
-        
+
         appointment = {
             'Id': appointment_data[0],
             'Date': appointment_data[1].strftime('%Y-%m-%dT%H:%M:%S'),
             'Description': appointment_data[2],
             'Participants': []
         }
-        
+
         for participant in participants_data:
-            participant_info = {'UserId': participant[0], 'Name': participant[1], 'Lastname': participant[2]}
+            participant_info = {
+                'UserId': participant[0],
+                'Name': participant[1],
+                'Lastname': participant[2]
+            }
             appointment['Participants'].append(participant_info)
 
     except Exception as e:
@@ -1847,7 +1761,7 @@ def get_appointment(appointment_id):
     finally:
         if 'cur' in locals():
             cur.close()
-    
+
     return jsonify(appointment), 200
 
 @app.route('/appointment/<int:appointment_id>/update', methods=['PUT'])
