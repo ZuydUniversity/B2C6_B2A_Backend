@@ -102,7 +102,6 @@ def login():
         email = request.json["email"]
         password = request.json["password"]
         # Hash the incoming password
-        hashed_password = hash_password(password)
         cursor = mysql.connection.cursor()
         # Fetch the user's hashed password from the database
         cursor.execute('''SELECT Role, Id, Password FROM User WHERE Email = %s''', (email,))

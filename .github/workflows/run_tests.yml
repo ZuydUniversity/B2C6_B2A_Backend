@@ -30,7 +30,12 @@ jobs:
         echo "MYSQL_HOST=${{ secrets.MYSQL_HOST }}" >> .env
         echo "SECRET_KEY=${{ secrets.SECRET_KEY }}" >> .env
         echo "MAIL_PASSWORD=${{ secrets.MAIL_PASSWORD }}" >> .env
-
+  
+    - name: Verify .env file with Python script
+      run: |
+        echo "Running check_env.py"
+        python check_env.py
+        
     - name: Test with pytest
       run: |
         pytest
