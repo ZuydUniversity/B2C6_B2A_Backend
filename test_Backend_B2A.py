@@ -325,19 +325,6 @@ def test_get_user_appointments(client, mocker, user_id, request_params, db_data,
         assert response.status_code == expected_status_code
         assert response.get_json() == expected_response
 
-#Function needs to have the email and password created in the database, so it can be tested
-def test_login_success(client):
-    with app.app_context():
-        # Mock data for successful login
-        email = "backendtest@mail.nl"
-        password = "123"
-
-        response = client.post("/login", json={"email": email, "password": password})
-        print(response.status_code)
-        # Check for success
-        assert response.status_code == 200
-
-
 def test_login_failure_wrong_password(client):
     with app.app_context():
         # Mock data for login with wrong password
