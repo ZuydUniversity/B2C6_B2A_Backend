@@ -112,7 +112,7 @@ def login():
     try:
         email = request.json["email"]
         password = request.json["password"]
-
+        # Hash the incoming password
         cursor = mysql.connection.cursor()
         cursor.execute('''SELECT Role, Id, Password FROM User WHERE Email = %s''', (email,))
         result = cursor.fetchone()
