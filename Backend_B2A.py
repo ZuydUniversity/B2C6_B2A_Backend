@@ -14,6 +14,8 @@ from flask_mail import Mail, Message
 import tempfile
 import json  # Import the json module
 from reportlab.pdfgen import canvas
+import bcrypt
+
 
 load_dotenv()
 
@@ -79,26 +81,41 @@ def serialize_data(data):
         # Return data as is if it's not bytes
         return data
 
+
+def hash_password(password):
+    # Convert the password to bytes
+    password_bytes = password.encode('utf-8')
+    
+    # Generate a salt
+    salt = bcrypt.gensalt()
+    
+    # Hash the password
+    hashed_password = bcrypt.hashpw(password_bytes, salt)
+    
+    # Return the hashed password
+    return hashed_password
+
+
 @app.route("/login", methods=["POST"])
 def login():
     try:
         email = request.json["email"]
         password = request.json["password"]
+        # Hash the incoming password
+        hashed_password = hash_password(password)
         cursor = mysql.connection.cursor()
-        cursor.execute(
-            '''
-            SELECT Role, Id 
-            FROM User WHERE Email = %s 
-            AND BINARY Password = %s
-            '''
-            , (email, password,))
+        # Fetch the user's hashed password from the database
+        cursor.execute('''SELECT Role, Id, Password FROM User WHERE Email = %s''', (email,))
         result = cursor.fetchone()
         if result is None:
             return "", 400
         else:
-            role = result[0]
-            id = result[1]
-            return jsonify({"role": role, "user_id": id}), 200
+            role, user_id, db_hashed_password = result
+            # Compare the hashed passwords (assuming bcrypt)
+            if bcrypt.checkpw(password.encode('utf-8'), db_hashed_password.encode('utf-8')):
+                return jsonify({"role": role, "user_id": user_id}), 200
+            else:
+                return "", 400
     except Exception as e:
         app.logger.error(f'Error during login: {e}')
         return "", 500
@@ -125,8 +142,8 @@ def register():
 
     if emailUsed == -1:
         return "", 500
-    elif emailUsed == 0:
-        password = form_data["password"]
+    elif(emailUsed == 0):
+        password = hash_password(form_data["password"])
         firstName = form_data["firstName"]
         lastName = form_data["lastName"]
         accountType = form_data["accountType"]
@@ -214,7 +231,7 @@ def reset_password(token):
     except SignatureExpired:
         return "", 400
 
-    new_password = request.json["password"]
+    new_password = hash_password(request.json["password"])
 
     try:
         cursor = mysql.connection.cursor()
@@ -1785,6 +1802,53 @@ def create_appointment():
         if 'cur' in locals():
             cur.close()
     return jsonify({"message": "Appointment added successfully"}), 200
+
+@app.route('/appointment/get/<int:appointment_id>', methods=['GET'])
+def get_appointment(appointment_id):
+    try:
+        cur = mysql.connection.cursor()
+        
+        # Fetch the appointment details
+        appointment_query = """
+            SELECT Id, Date, Description
+            FROM Appointment
+            WHERE Id = %s
+        """
+        cur.execute(appointment_query, (appointment_id,))
+        appointment_data = cur.fetchone()
+        
+        if not appointment_data:
+            return jsonify({"error": "Appointment not found"}), 404
+        
+        print(appointment_data)
+        # Fetch the participants
+        participants_query = """
+            SELECT u.Id as UserId, u.Name, u.Lastname
+            FROM User u
+            JOIN `Appointment-Users` au ON u.Id = au.UserId
+            WHERE au.AppointmentId = %s
+        """
+        cur.execute(participants_query, (appointment_id,))
+        participants_data = cur.fetchall()
+        
+        appointment = {
+            'Id': appointment_data[0],
+            'Date': appointment_data[1].strftime('%Y-%m-%dT%H:%M:%S'),
+            'Description': appointment_data[2],
+            'Participants': []
+        }
+        
+        for participant in participants_data:
+            participant_info = {'UserId': participant[0], 'Name': participant[1], 'Lastname': participant[2]}
+            appointment['Participants'].append(participant_info)
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if 'cur' in locals():
+            cur.close()
+    
+    return jsonify(appointment), 200
 
 @app.route('/appointment/<int:appointment_id>/update', methods=['PUT'])
 def update_appointment(appointment_id):
