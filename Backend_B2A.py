@@ -1,3 +1,9 @@
+import os
+import logging
+import base64
+from datetime import datetime
+from collections import defaultdict
+from io import BytesIO
 from flask import Flask, jsonify, request, send_file, make_response
 from flask_mysqldb import MySQL
 from flask_cors import CORS
@@ -11,7 +17,6 @@ from io import BytesIO
 import logging
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired
 from flask_mail import Mail, Message
-import os
 import tempfile
 import json  # Import the json module
 from reportlab.pdfgen import canvas
@@ -66,6 +71,7 @@ def before_request_func():
         except Exception as e:
             app.logger.error(f'Error connecting to MySQL: {e}')
             return jsonify({"Error connecting to MySQL": str(e)}), 500
+    return None
 
 def serialize_data(data):
     if isinstance(data, bytes):
@@ -95,13 +101,13 @@ def create_jwt_token(user_id, user_role):
 def hash_password(password):
     # Convert the password to bytes
     password_bytes = password.encode('utf-8')
-    
+
     # Generate a salt
     salt = bcrypt.gensalt()
-    
+
     # Hash the password
     hashed_password = bcrypt.hashpw(password_bytes, salt)
-    
+
     # Return the hashed password
     return hashed_password
 
@@ -160,12 +166,12 @@ def get_account_info():
 def emailCheck(email):
     try:
         cursor = mysql.connection.cursor()
-        cursor.execute('''SELECT COUNT(*) FROM User WHERE Email = %s''', (email,)) 
+        cursor.execute('''SELECT COUNT(*) FROM User WHERE Email = %s''', (email,))
         EmailUsed = cursor.fetchone()[0]
         cursor.close()
         return EmailUsed
     except Exception as e:
-        return -1
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/register", methods=["POST"])
 def register():
@@ -177,7 +183,7 @@ def register():
     email = form_data["email"]
     emailUsed = int(emailCheck(email))
 
-    if(emailUsed == -1):
+    if emailUsed == -1:
         return "", 500
     elif(emailUsed == 0):
         password = hash_password(form_data["password"])
@@ -193,7 +199,7 @@ def register():
             role = 3
         elif accountType == "Researcher":
             role = 4
-            
+
         specialization = form_data["specialization"]
         gender = form_data["gender"]
         birthDate = form_data["birthDate"]
@@ -202,31 +208,41 @@ def register():
         contact_lastname = form_data["contact_lastname"]
         contact_email = form_data["contact_email"]
         contact_phone = form_data["contact_phone"]
-        
+
         photo_url = None
         # if 'photo' in request.files:
         #     photo = request.files["photo"]
         #     temp_file = tempfile.NamedTemporaryFile(delete=False)
         #     photo.save(temp_file.name)
         #     try:
-                
+
         #     finally:
         #         temp_file.close()
         #         os.unlink(temp_file.name)
 
         cursor = mysql.connection.cursor()
         try:
-            cursor.execute('''INSERT INTO User (Role, Email, Password, Name, Lastname, Specialization, Gender, Birthdate, Phone_number, Photo, Contactperson_email, Contactperson_name, Contactperson_lastname, Contactperson_phone_number) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)''', (role, email, password, firstName, lastName, specialization, gender, birthDate, phoneNumber, photo_url, contact_email, contact_name, contact_lastname, contact_phone,))
+            cursor.execute(
+                '''
+                INSERT INTO User 
+                (Role, Email, Password, Name, Lastname, Specialization, 
+                Gender, Birthdate, Phone_number, Photo, Contactperson_email, 
+                Contactperson_name, Contactperson_lastname, Contactperson_phone_number) 
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ''',
+                (role, email, password, firstName,
+                 lastName, specialization, gender,
+                 birthDate, phoneNumber, photo_url,
+                 contact_email, contact_name,
+                 contact_lastname, contact_phone,))
             mysql.connection.commit()
             cursor.close()
             return "", 200
         except Exception as e:
             app.logger.error(f'Error during registration: {e}')
-            return "", 500       
+            return "", 500
     else:
         return "", 400
-
- 
 
 ## DOES NOT WORK ON SCHOOL INTERNET!
 @app.route("/send_password_reset_email", methods=["POST"])
@@ -237,17 +253,19 @@ def send_password_reset_email():
         token = URLserializer.dumps(email, salt='ghi3yt7yhg874g89(*uh)')
         ## have to replace the url with the actual url when using on azure
         reset_url = f"http://localhost:5173/reset-password/{token}"
-        html = f'<p>Uw link om een nieuwe wachtwoord te maken is: <a href="{reset_url}">Link</a></p>'
+        html = (
+                f'<p>Uw link om een nieuwe wachtwoord te maken is: '
+                f'<a href="{reset_url}">Link</a></p>'
+                )
         msg = Message('Nieuwe wachtwoord link', sender='Zuydb2a@proton.me', recipients=[email])
         msg.body = 'Druk op de link om een nieuwe wachtwoord te maken.'
         msg.html = html
         mail.send(msg)
-        return "", 200 
-    elif(exists == 0):
+        return "", 200
+    elif exists == 0:
         return "", 400
     else:
         return "", 500
-
 
 @app.route('/reset_password/<token>', methods=['POST'])
 def reset_password(token):
@@ -265,16 +283,11 @@ def reset_password(token):
         cursor.close()
         return "", 200
     except Exception as e:
-        return "", 500  
-
-
-
-
-
+        return jsonify({"error": str(e)}), 500
 
 #   --------------------------
-#   |   User API Functions   |   
-#   -------------------------- 
+#   |   User API Functions   |
+#   --------------------------
 
 # gets all doctors
 @app.route('/get_doctors', methods=['GET'])
@@ -285,7 +298,7 @@ def get_doctors():
         doctors = cur.fetchall()
         column_names = [desc[0] for desc in cur.description] if cur.description else []
         cur.close()
-        
+
         if not doctors:
             return jsonify({"error": "No doctors found"}), 404
 
@@ -299,7 +312,7 @@ def get_doctors():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
+
 # gets a doctor by ID
 @app.route('/get_doctor/<int:doctor_id>', methods=['GET'])
 def get_doctor(doctor_id):
@@ -310,7 +323,7 @@ def get_doctor(doctor_id):
         doctor = cur.fetchone()
         column_names = [desc[0] for desc in cur.description] if cur.description else []
         cur.close()
-        
+
         if not doctor:
             return jsonify({"error": "Doctor not found"}), 404
 
@@ -324,7 +337,7 @@ def get_doctor(doctor_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
+
 # Update doctor information
 @app.route('/update_doctor/<int:doctor_id>', methods=['PUT'])
 def update_doctor(doctor_id):
@@ -360,7 +373,7 @@ def update_doctor(doctor_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
+
 # delete a doctor
 @app.route('/delete_doctor/<int:doctor_id>', methods=['DELETE'])
 def delete_doctor(doctor_id):
@@ -383,7 +396,7 @@ def delete_doctor(doctor_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
+
 # gets all patients
 @app.route('/get_patients', methods=['GET'])
 def get_patients():
@@ -393,7 +406,7 @@ def get_patients():
         patients = cur.fetchall()
         column_names = [desc[0] for desc in cur.description] if cur.description else []
         cur.close()
-        
+
         if not patients:
             return jsonify({"error": "No patients found"}), 404
 
@@ -407,7 +420,7 @@ def get_patients():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
+
 # gets a patient by ID
 @app.route('/get_patient/<int:patient_id>', methods=['GET'])
 def get_patient(patient_id):
@@ -418,7 +431,7 @@ def get_patient(patient_id):
         patient = cur.fetchone()
         column_names = [desc[0] for desc in cur.description] if cur.description else []
         cur.close()
-        
+
         if not patient:
             return jsonify({"error": "Patient not found"}), 404
 
@@ -432,7 +445,7 @@ def get_patient(patient_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
+
 # Update patient information
 @app.route('/update_patient/<int:patient_id>', methods=['PUT'])
 def update_patient(patient_id):
@@ -494,7 +507,7 @@ def update_patient(patient_id):
     except Exception as e:
         print(f"An error occurred: {e}")
         return jsonify({"error": str(e)}), 500
-    
+
 # delete a patient
 @app.route('/delete_patient/<int:patient_id>', methods=['DELETE'])
 def delete_patient(patient_id):
@@ -517,7 +530,7 @@ def delete_patient(patient_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
+
 # gets a user by ID
 @app.route('/get_user/<int:user_id>', methods=['GET'])
 def get_user(user_id):
@@ -528,7 +541,7 @@ def get_user(user_id):
         user = cur.fetchone()
         column_names = [desc[0] for desc in cur.description] if cur.description else []
         cur.close()
-        
+
         if not user:
             return jsonify({"error": "User not found"}), 404
 
@@ -555,34 +568,37 @@ def update_user(user_id):
         Phone_number = data.get('Phone_number')
         AccessibilityMode = data.get('AccessibilityMode')
         EmailNotifications = data.get('EmailNotifications')
-        
+
         # Check if all required fields are provided
-        if not all([Name, Lastname, Gender, Email, Phone_number, AccessibilityMode is not None, EmailNotifications is not None]):
+        if not all([Name, Lastname, Gender, Email, Phone_number,
+                    AccessibilityMode is not None, EmailNotifications is not None]):
             return jsonify({"error": "Missing required fields"}), 400
-        
+
         cur = mysql.connection.cursor()
         query = """
-            UPDATE User 
-            SET Name = %s, 
-                Lastname = %s, 
-                Gender = %s, 
-                Email = %s, 
-                Phone_number = %s, 
-                AccessibilityMode = %s, 
-                EmailNotifications = %s 
+            UPDATE User
+            SET Name = %s,
+                Lastname = %s,
+                Gender = %s,
+                Email = %s,
+                Phone_number = %s,
+                AccessibilityMode = %s,
+                EmailNotifications = %s
             WHERE Id = %s
         """
-        cur.execute(query, (Name, Lastname, Gender, Email, Phone_number, AccessibilityMode, EmailNotifications, user_id))
+        cur.execute(query, (Name, Lastname, Gender, Email,
+                            Phone_number, AccessibilityMode,
+                            EmailNotifications, user_id))
         mysql.connection.commit()
         cur.close()
-        
+
         return jsonify({"success": "User updated successfully"}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
+
 #   -----------------------------------------
-#   |   Patient Information API Functions   |   
+#   |   Patient Information API Functions   |
 #   -----------------------------------------
 
 # Get a patient their medication
@@ -605,7 +621,7 @@ def get_patient_medication(patient_id):
         return jsonify(medications_list)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
+
 # Add medication for a patient
 @app.route('/patients/<int:patient_id>/medication', methods=['POST'])
 def add_medication(patient_id):
@@ -631,11 +647,18 @@ def add_medication(patient_id):
 
         # Add medication for the patient
         cur = mysql.connection.cursor()
-        query = "INSERT INTO Medication (PatientId, Name, Dose, Start_date, Frequency) VALUES (%s, %s, %s, %s, %s)"
-        cur.execute(query, (patient_id, medication_data['Name'], medication_data['Dose'], medication_data['Start_date'], medication_data['Frequency']))
-        
+        query = (
+                "INSERT INTO Medication "
+                "(PatientId, Name, Dose, Start_date, Frequency) "
+                "VALUES (%s, %s, %s, %s, %s)"
+                )
+        cur.execute(query,
+                    (patient_id, medication_data['Name'], medication_data['Dose'],
+                     medication_data['Start_date'], medication_data['Frequency']))
+
         # After executing the insert query
-        new_medication_id = cur.lastrowid  # This is an example; the exact method depends on your database adapter
+        new_medication_id = cur.lastrowid
+        # This is an example; the exact method depends on your database adapter
         mysql.connection.commit()
         cur.close()
 
@@ -643,7 +666,7 @@ def add_medication(patient_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
+
 # Update medication for a patient
 @app.route('/patients/<int:patient_id>/medication/<int:medication_id>', methods=['PUT'])
 def update_medication(patient_id, medication_id):
@@ -664,7 +687,8 @@ def update_medication(patient_id, medication_id):
             formatted_date = received_date.strftime('%Y-%m-%d')
             medication_data['Start_date'] = formatted_date
         except ValueError as e:
-            response = jsonify({"error": "Incorrect date format for Start_date. Expected format: 'Thu, 16 May 2024 00:00:00 GMT'"}), 400
+            response = jsonify({"error": f"Incorrect date format for Start_date. {str(e)} "
+                         "Expected format: 'Thu, 16 May 2024 00:00:00 GMT'"}), 400
         else:
             # Proceed with the formatted_date for further processing
             response = jsonify({"formatted_date": formatted_date})
@@ -681,8 +705,11 @@ def update_medication(patient_id, medication_id):
 
         # Update medication for the patient
         cur = mysql.connection.cursor()
-        query = "UPDATE Medication SET Name = %s, Dose = %s, Start_date = %s, Frequency = %s WHERE Id = %s"
-        cur.execute(query, (medication_data['Name'], medication_data['Dose'], medication_data['Start_date'], medication_data['Frequency'], medication_id))
+        query = ("UPDATE Medication SET Name = %s, Dose = %s,"
+                 "Start_date = %s, Frequency = %s WHERE Id = %s")
+        cur.execute(query, (medication_data['Name'], medication_data['Dose'],
+                            medication_data['Start_date'], medication_data['Frequency'],
+                            medication_id))
         mysql.connection.commit()
         cur.close()
 
@@ -716,7 +743,7 @@ def delete_medication(patient_id, medication_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
+
 @app.route('/patients/<int:patient_id>/diagnosis', methods=['POST'])
 def add_diagnosis(patient_id):
     diagnosis_data = request.get_json()
@@ -736,8 +763,11 @@ def add_diagnosis(patient_id):
         return jsonify({"error": "Patient not found"}), 404
 
     cur = mysql.connection.cursor()
-    query = "INSERT INTO Diagnosis (PatientId, DoctorId, Diagnosis, Description, Date) VALUES (%s, %s, %s, %s, %s)"
-    cur.execute(query, (patient_id, diagnosis_data['DoctorId'], diagnosis_data['Diagnosis'], diagnosis_data['Description'], diagnosis_data['Date']))
+    query = ("INSERT INTO Diagnosis (PatientId, DoctorId, Diagnosis, Description, Date)"
+             "VALUES (%s, %s, %s, %s, %s)")
+    cur.execute(query, (patient_id, diagnosis_data['DoctorId'],
+                        diagnosis_data['Diagnosis'], diagnosis_data['Description'],
+                        diagnosis_data['Date']))
     mysql.connection.commit()
     cur.close()
 
@@ -772,11 +802,14 @@ def update_diagnosis(patient_id, diagnosis_id):
             except ValueError:
                 print("Failed to parse date with both expected formats")
                 # If both formats fail, return an error message
-                return jsonify({"error": "Incorrect date format. Expected formats: 'Fri, 29 Mar 2024 00:00:00 GMT' or '2024-03-20'"}), 400
+                return jsonify({"error": "Incorrect date format. Expected formats:"
+                                "'Fri, 29 Mar 2024 00:00:00 GMT' or '2024-03-20'"}), 400
 
-        # If parsing is successful, format the datetime object to the desired format for the database
+        # If parsing is successful, format the datetime
+        # object to the desired format for the database
         formatted_date = received_date.strftime('%Y-%m-%d')
-        diagnosis_data['Date'] = formatted_date  # Update the date in diagnosis_data with the formatted date
+        diagnosis_data['Date'] = formatted_date
+        # Update the date in diagnosis_data with the formatted date
         print(f"Formatted date: {formatted_date}")
 
         # Check if the diagnosis exists and belongs to the patient
@@ -790,9 +823,12 @@ def update_diagnosis(patient_id, diagnosis_id):
             return jsonify({"error": "Diagnosis not found for this patient"}), 404
 
         # Update diagnosis for the patient
-        query = "UPDATE Diagnosis SET DoctorId = %s, Diagnosis = %s, Description = %s, Date = %s WHERE Id = %s"
+        query = ("UPDATE Diagnosis"
+                 "SET DoctorId = %s, Diagnosis = %s, Description = %s, Date = %s"
+                 "WHERE Id = %s")
         print(f"Updating diagnosis with data: {diagnosis_data}")  # Log updating diagnosis
-        cur.execute(query, (diagnosis_data['DoctorId'], diagnosis_data['Diagnosis'], diagnosis_data['Description'], diagnosis_data['Date'], diagnosis_id))
+        cur.execute(query, (diagnosis_data['DoctorId'], diagnosis_data['Diagnosis'],
+                            diagnosis_data['Description'], diagnosis_data['Date'], diagnosis_id))
         mysql.connection.commit()
         print("Diagnosis updated successfully")  # Log successful update
         cur.close()
@@ -803,7 +839,6 @@ def update_diagnosis(patient_id, diagnosis_id):
         print(f"Error occurred: {e}")  # Log any exceptions
         return jsonify({"error": str(e)}), 500
 
-      
 # Delete a diagnosis for a patient
 @app.route('/patients/<int:patient_id>/diagnosis/<int:diagnosis_id>', methods=['DELETE'])
 def delete_diagnosis(patient_id, diagnosis_id):
@@ -895,7 +930,6 @@ def get_patient_results(patient_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-    
 # Get a specific result belonging to a patient
 @app.route('/patients/<int:patient_id>/get_results/<int:result_id>', methods=['GET'])
 def get_patient_result(patient_id, result_id):
@@ -918,9 +952,7 @@ def get_patient_result(patient_id, result_id):
 
         return jsonify(result_dict)
     except Exception as e:
-        return jsonify({"message": "An error occurred"})
-
-
+        return jsonify({"error": str(e)}), 500
 
 # Delete a result
 @app.route('/delete_result/<int:result_id>', methods=['DELETE'])
@@ -952,7 +984,7 @@ def delete_result(result_id):
         return jsonify({"message": "Result deleted successfully"})
 
     except Exception as e:
-        return jsonify({"message": "An error occurred"})
+        return jsonify({"error": str(e)}), 500
 
 # Add a result for a patient
 @app.route('/patients/<int:patient_id>/add_result', methods=['POST'])
@@ -978,8 +1010,11 @@ def add_patient_result(patient_id):
 
         # Add result for the patient
         cur = mysql.connection.cursor()
-        query = "INSERT INTO Result (PatientId, TestName, ResultValue, Date) VALUES (%s, %s, %s, %s)"
-        cur.execute(query, (patient_id, result_data['test_name'], result_data['result_value'], result_data['date']))
+        query = ("INSERT INTO Result"
+                 "(PatientId, TestName, ResultValue, Date)"
+                 "VALUES (%s, %s, %s, %s)")
+        cur.execute(query, (patient_id, result_data['test_name'],
+                            result_data['result_value'], result_data['date']))
         mysql.connection.commit()
         cur.close()
 
@@ -1013,7 +1048,8 @@ def update_patient_result(patient_id, result_id):
         # Update result for the patient
         cur = mysql.connection.cursor()
         query = "UPDATE Result SET TestName = %s, ResultValue = %s, Date = %s WHERE Id = %s"
-        cur.execute(query, (result_data['test_name'], result_data['result_value'], result_data['date'], result_id))
+        cur.execute(query, (result_data['test_name'], result_data['result_value'],
+                            result_data['date'], result_id))
         mysql.connection.commit()
         cur.close()
 
@@ -1027,7 +1063,8 @@ def update_patient_result(patient_id, result_id):
 def add_note(patient_id, result_id):
     try:
         note_text = request.get_json().get('note')
-        doctor_id = request.get_json().get('doctor_id')  # Assuming you get the doctor's ID from the request
+        doctor_id = request.get_json().get('doctor_id')
+        # Assuming you get the doctor's ID from the request
 
         # Check if the patient exists and has the appropriate role
         cur = mysql.connection.cursor()
@@ -1083,8 +1120,8 @@ def get_result_notes(result_id):
 
         return jsonify(notes_list)
     except Exception as e:
-        return jsonify({"message": "An error occurred"})
-    
+        return jsonify({"error": str(e)}), 500
+
 # Delete a note for a specific patient's result
 @app.route('/patient/<int:patient_id>/result/<int:result_id>/delete_note', methods=['DELETE'])
 def delete_note(patient_id, result_id):
@@ -1133,7 +1170,6 @@ def delete_note(patient_id, result_id):
     except Exception as e:
         return jsonify({"message": "An error occurred: {}".format(str(e))})
 
-    
 # Edit a note for a specific patient's result
 @app.route('/patient/<int:patient_id>/result/<int:result_id>/edit_note', methods=['PUT'])
 def edit_note(patient_id, result_id):
@@ -1171,8 +1207,8 @@ def edit_note(patient_id, result_id):
         return jsonify({"message": "Note updated successfully"})
 
     except Exception as e:
-        return jsonify({"message": "An error occurred"})
-    
+        return jsonify({"error": str(e)}), 500
+
 # Create an excercise
 @app.route('/patients/<int:patient_id>/excercise', methods=['POST'])
 def add_patient_excercise():
@@ -1198,7 +1234,8 @@ def add_patient_excercise():
         # Add excercise for the patient
         cur = mysql.connection.cursor()
         query = "INSERT INTO Excercise (Name, Description, CMASId) VALUES (%s, %s, %s)"
-        cur.execute(query, (excercise_data['name'], excercise_data['description'], excercise_data['cmas_id']))
+        cur.execute(query, (excercise_data['name'],
+                             excercise_data['description'], excercise_data['cmas_id']))
         mysql.connection.commit()
         cur.close()
 
@@ -1206,7 +1243,7 @@ def add_patient_excercise():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
+
 # Get a patient's excercises
 @app.route('/patients/<int:patient_id>/excercises', methods=['GET'])
 def get_patient_excercises(patient_id):
@@ -1290,8 +1327,12 @@ def update_patient_excercise(patient_id, excercise_id):
 
         # Update excercise for the patient
         cur = mysql.connection.cursor()
-        query = "UPDATE Excercise SET `Left` = %s, `Right` = %s, Type = %s, Gewricht = %s, CMASId = %s WHERE Id = %s"
-        cur.execute(query, (excercise_data['Left'], excercise_data['Right'], excercise_data['Type'], excercise_data['Gewricht'], excercise_data['CMASId'], excercise_id))
+        query = ("UPDATE Excercise"
+                 "SET `Left` = %s, `Right` = %s, Type = %s, Gewricht = %s, CMASId = %s"
+                 "WHERE Id = %s")
+        cur.execute(query, (excercise_data['Left'], excercise_data['Right'],
+                            excercise_data['Type'], excercise_data['Gewricht'],
+                            excercise_data['CMASId'], excercise_id))
         mysql.connection.commit()
         cur.close()
 
@@ -1332,7 +1373,7 @@ def delete_patient_excercise(patient_id, excercise_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
+
 # Get a patient's appointments
 @app.route('/patients/<int:patient_id>/appointments', methods=['GET'])
 def get_patient_appointments(patient_id):
@@ -1375,14 +1416,17 @@ def get_patient_notes(patient_id):
 
         return jsonify(notes_list)
     except Exception as e:
-        return jsonify({"message": "Error occurred while retrieving notes"})
+        return jsonify({"error": str(e)}), 500
 
 # Get all notes belonging to a doctor
 @app.route('/patients/<int:patient_id>/doctornotes', methods=['GET'])
 def get_doctor_notes(patient_id):
     try:
         cur = mysql.connection.cursor()
-        query = "SELECT Type, Date, Name, Lastname FROM your_database_name.Note INNER JOIN `User` ON Note.Id = `User`.Id WHERE DoctorId = %s ORDER BY Date desc"
+        query = ( "SELECT Type, Date, Name, Lastname"
+                  "FROM your_database_name.Note"
+                  "INNER JOIN `User` ON Note.Id = `User`.Id"
+                  "WHERE DoctorId = %s ORDER BY Date desc" )
         cur.execute(query, (patient_id,))
         notes = cur.fetchall()
 
@@ -1396,7 +1440,7 @@ def get_doctor_notes(patient_id):
 
         return jsonify(doctornotes_list)
     except Exception as e:
-        return jsonify({"message": "Error occurred while retrieving notes"})
+        return jsonify({"error": str(e)}), 500
 
 # Get a patient's UPCOMING appointments (limit of 5, desc order)
 @app.route('/patients/<int:patient_id>/upcomingappointments', methods=['GET'])
@@ -1445,50 +1489,11 @@ def get_user_firstnamelastname(patient_id):
 
         return jsonify(firstname_lastname)
     except Exception as e:
-        return jsonify({"message": "Error occurred while retrieving name"})        
-    
-
-# DOWNLOAD FUNCTIONS (PDF) (GONNA NEED SOME SERIOUS TESTING and probably some adjustments to the layout of the pdf)
-
-# Function to generate a PDF of a specific patient's data
-@app.route('/download_patient_pdf/<int:patient_id>', methods=['GET'])
-def download_patient_pdf(patient_id):
-    try:
-        cur = mysql.connection.cursor()
-        query = "SELECT * FROM User WHERE Id = %s AND Role = '2'"
-        cur.execute(query, (patient_id,))
-        patient = cur.fetchone()
-        column_names = [desc[0] for desc in cur.description] if cur.description else []
-        cur.close()
-
-        if not patient:
-            return jsonify({"error": "Patient not found"}), 404
-
-        # Convert the result to a dictionary
-        patient_dict = dict(zip(column_names, patient))
-
-        # Create a PDF
-        pdf = FPDF()
-        pdf.add_page()
-        pdf.set_font("Arial", size=12)
-        
-        # Add a title
-        pdf.cell(200, 10, txt="Patient Data", ln=True, align='C')
-
-        # Add patient data
-        for key, value in patient_dict.items():
-            pdf.cell(200, 10, txt=f"{key}: {value}", ln=True, align='L')
-
-        # Save the PDF to a bytes buffer
-        pdf_buffer = io.BytesIO()
-        pdf.output(pdf_buffer)
-        pdf_buffer.seek(0)
-
-        return send_file(pdf_buffer, as_attachment=True, download_name=f'patient_{patient_id}_data.pdf', mimetype='application/pdf')
-
-    except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
+
+# DOWNLOAD FUNCTIONS (PDF)
+# (GONNA NEED SOME SERIOUS TESTING and probably some adjustments to the layout of the pdf)
+
 def fetch_from_db(query, params):
     cur = mysql.connection.cursor()
     cur.execute(query, params)
@@ -1535,30 +1540,32 @@ def download_result_pdf(patient_id, result_id):
         c.setFont("Helvetica", 12)
         c.drawString(100, 750, "Patiëntgegevens")
         c.drawString(100, 710, f"Patiëntnaam: {patient[0]['Name']} {patient[0]['Lastname']}")
-        
+
         # Datum toevoegen naast de patiëntnaam
         result_date = result[0]['Date'].strftime('%d-%m-%Y')
         c.drawString(450, 710, f"Datum: {result_date}")
-        
+
         c.line(100, 700, 550, 700)
 
         # Tabel met oefeningen toevoegen
         if exercises:
             c.drawString(100, 690, "Oefeningen:")
             table_header = ["Type", "Gewricht", "Links", "Rechts"]
-            table_data = [(exercise['Type'], exercise['Gewricht'], exercise['Left'], exercise['Right']) for exercise in exercises]
+            table_data = [(exercise['Type'], exercise['Gewricht'],
+                           exercise['Left'], exercise['Right']) for exercise in exercises]
 
             table_start_x = 100
             table_start_y = 670
             row_height = 20
-            col_widths = [150, 150, 100, 100] 
+            col_widths = [150, 150, 100, 100]
 
             for i, header in enumerate(table_header):
                 c.drawString(table_start_x + sum(col_widths[:i]), table_start_y, header)
 
             for i, data in enumerate(table_data):
                 for j, item in enumerate(data):
-                    c.drawString(table_start_x + sum(col_widths[:j]), table_start_y - (i + 1) * row_height, str(item))
+                    c.drawString(table_start_x + sum(col_widths[:j]),
+                                 table_start_y - (i + 1) * row_height, str(item))
 
         if notes:
             c.drawString(100, table_start_y - (len(table_data) + 3) * row_height, "Notities:")
@@ -1581,61 +1588,13 @@ def download_result_pdf(patient_id, result_id):
 
     except Exception as e:
         return jsonify({"message": f"Fout opgetreden: {str(e)}"}), 500
-    
-# Function to download a specific research result belonging to a patient
-@app.route('/download_research_result_pdf/<int:patient_id>/<int:result_id>', methods=['GET'])
-def download_research_result_pdf(patient_id, result_id):
-    try:
-        # Check if the patient exists
-        cur = mysql.connection.cursor()
-        query = "SELECT * FROM User WHERE Id = %s AND Role = '2'"
-        cur.execute(query, (patient_id,))
-        patient = cur.fetchone()
-        column_names = [desc[0] for desc in cur.description] if cur.description else []
-        cur.close()
-
-        if not patient:
-            return jsonify({"message": "Patient not found"})
-
-        # Check if the research result exists
-        cur = mysql.connection.cursor()
-        query = "SELECT * FROM ResearchResults WHERE Id = %s AND PatientId = %s"
-        cur.execute(query, (result_id, patient_id))
-        research_result = cur.fetchone()
-        column_names = [desc[0] for desc in cur.description] if cur.description else []
-        cur.close()
-
-        if not research_result:
-            return jsonify({"message": "Research result not found"})
-
-        # Create a PDF
-        pdf = FPDF()
-        pdf.add_page()
-        pdf.set_font("Arial", size=12)
-
-        # Add a title
-        pdf.cell(200, 10, txt="Research Result Data", ln=True, align='C')
-
-        # Add research result data
-        for key, value in dict(zip(column_names, research_result)).items():
-            pdf.cell(200, 10, txt=f"{key}: {value}", ln=True)
-
-        # Save the PDF to a bytes buffer
-        pdf_buffer = io.BytesIO()
-        pdf.output(pdf_buffer)
-        pdf_buffer.seek(0)
-
-        return send_file(pdf_buffer, as_attachment=True, download_name=f'research_result_{result_id}_data.pdf', mimetype='application/pdf')
-
-    except Exception as e:
-        return jsonify({"message": "An error occurred"})
 
 #   ----------------------------------
-#   |   Appointments API Functions   |   
+#   |   Appointments API Functions   |
 #   ----------------------------------
 
-# Only use this endpoint for prototype purposes 
-# It retrieves all appointments and associating user data 
+# Only use this endpoint for prototype purposes
+# It retrieves all appointments and associating user data
 # This can severly impact your DB if the DB is a large production DB
 @app.route('/appointment/get_all', methods=['GET'])
 def get_all_appointments():
@@ -1650,7 +1609,7 @@ def get_all_appointments():
                 """
         cur.execute(query)
         data = cur.fetchall()
-       
+
         if not data:
             return jsonify([]), 200
 
@@ -1721,11 +1680,13 @@ def get_all_user_appointments(user_id):
             appointment_id = row['AppointmentId']
             appointments[appointment_id]['Date'] = row['Date']
             appointments[appointment_id]['Description'] = row['Description']
-            
-            participant = {'UserId': row['UserId'], 'Name': row['Name'], 'Lastname': row['Lastname']}
+
+            participant = ({'UserId': row['UserId'],
+                            'Name': row['Name'],
+                            'Lastname': row['Lastname']})
             if participant not in appointments[appointment_id]['Participants']:
                 appointments[appointment_id]['Participants'].append(participant)
-            
+
             # Check for 'NoteType' instead of 'NoteContent' and assign it to 'Note'
             if 'NoteType' in row and row['NoteType']:
                 appointments[appointment_id]['Note'] = row['NoteType']
@@ -1751,9 +1712,11 @@ def create_appointment():
 
         # Validate appointment data
         required_fields = ['date', 'description', 'participants']
-        missing_fields = [field for field in required_fields if field not in appointment_data or (field == 'participants' and not appointment_data.get('participants'))]
+        missing_fields = [field for field in required_fields if field not in appointment_data
+                          or (field == 'participants' and not appointment_data.get('participants'))]
         if missing_fields:
-            return jsonify({"error": f"Missing required appointment data: {', '.join(missing_fields)}"}), 400
+            return jsonify({"error":
+                            f"Missing required appointment data: {', '.join(missing_fields)}"}), 400
 
         # Check if all participants exist
         participants_exist = True
@@ -1769,9 +1732,9 @@ def create_appointment():
 
         # Add appointment
         cur.execute("""
-                    INSERT INTO Appointment (Date, Description) 
+                    INSERT INTO Appointment (Date, Description)
                     VALUES (%s, %s)
-                    """, 
+                    """,
                     (appointment_data['date'], appointment_data['description']))
         mysql.connection.commit()
 
@@ -1797,7 +1760,7 @@ def create_appointment():
 def get_appointment(appointment_id):
     try:
         cur = mysql.connection.cursor()
-        
+
         # Fetch the appointment details
         appointment_query = """
             SELECT Id, Date, Description
@@ -1806,10 +1769,10 @@ def get_appointment(appointment_id):
         """
         cur.execute(appointment_query, (appointment_id,))
         appointment_data = cur.fetchone()
-        
+
         if not appointment_data:
             return jsonify({"error": "Appointment not found"}), 404
-        
+
         print(appointment_data)
         # Fetch the participants
         participants_query = """
@@ -1820,16 +1783,20 @@ def get_appointment(appointment_id):
         """
         cur.execute(participants_query, (appointment_id,))
         participants_data = cur.fetchall()
-        
+
         appointment = {
             'Id': appointment_data[0],
             'Date': appointment_data[1].strftime('%Y-%m-%dT%H:%M:%S'),
             'Description': appointment_data[2],
             'Participants': []
         }
-        
+
         for participant in participants_data:
-            participant_info = {'UserId': participant[0], 'Name': participant[1], 'Lastname': participant[2]}
+            participant_info = {
+                'UserId': participant[0],
+                'Name': participant[1],
+                'Lastname': participant[2]
+            }
             appointment['Participants'].append(participant_info)
 
     except Exception as e:
@@ -1837,7 +1804,7 @@ def get_appointment(appointment_id):
     finally:
         if 'cur' in locals():
             cur.close()
-    
+
     return jsonify(appointment), 200
 
 @app.route('/appointment/<int:appointment_id>/update', methods=['PUT'])
@@ -1855,9 +1822,11 @@ def update_appointment(appointment_id):
 
         # Validate appointment data
         required_fields = ['date', 'description', 'participants']
-        missing_fields = [field for field in required_fields if field not in appointment_data or (field == 'participants' and not appointment_data.get('participants'))]
+        missing_fields = [field for field in required_fields if field not in appointment_data
+                          or (field == 'participants' and not appointment_data.get('participants'))]
         if missing_fields:
-            return jsonify({"error": f"Missing required appointment data: {', '.join(missing_fields)}"}), 400
+            return jsonify({"error":
+                            f"Missing required appointment data: {', '.join(missing_fields)}"}), 400
 
         # Check if all participants exist
         participants_exist = True
@@ -1880,15 +1849,16 @@ def update_appointment(appointment_id):
 
         # Update appointment
         cur.execute("""
-                    UPDATE Appointment 
-                    SET Date = %s, Description = %s 
+                    UPDATE Appointment
+                    SET Date = %s, Description = %s
                     WHERE Id = %s
-                    """, 
+                    """,
                     (appointment_data['date'], appointment_data['description'], appointment_id))
         mysql.connection.commit()
 
         # Retrieve existing participants
-        cur.execute("SELECT UserId FROM `Appointment-Users` WHERE AppointmentId = %s", (appointment_id,))
+        cur.execute("SELECT UserId FROM `Appointment-Users`"
+                    "WHERE AppointmentId = %s", (appointment_id,))
         existing_participants = set(row[0] for row in cur.fetchall())
 
         # Identify participants
@@ -1897,10 +1867,13 @@ def update_appointment(appointment_id):
         participants_to_remove = existing_participants - new_participants
 
         for participant_id in participants_to_add:
-            cur.execute("INSERT INTO `Appointment-Users` (AppointmentId, UserId) VALUES (%s, %s)", (appointment_id, participant_id))
+            cur.execute("INSERT INTO `Appointment-Users` (AppointmentId, UserId)"
+                        "VALUES (%s, %s)", (appointment_id, participant_id))
 
         for participant_id in participants_to_remove:
-            cur.execute("DELETE FROM `Appointment-Users` WHERE AppointmentId = %s AND UserId = %s", (appointment_id, participant_id))
+            cur.execute("DELETE FROM `Appointment-Users`"
+                        "WHERE AppointmentId = %s"
+                        "AND UserId = %s", (appointment_id, participant_id))
 
         mysql.connection.commit()
     except Exception as e:
@@ -1930,7 +1903,7 @@ def delete_appointment(appointment_id):
         cur.execute("""
                     DELETE FROM Appointment
                     WHERE Id = %s
-                    """, 
+                    """,
                     (appointment_id,))
 
         mysql.connection.commit()
@@ -1949,18 +1922,22 @@ def get_user_appointments(user_id):
 
         start_date = request.args.get('start_date')
         end_date = request.args.get('end_date')
-        
+
         if not start_date or not end_date:
             return jsonify({"error": "start_date and end_date are required"}), 400
 
-        # Validate start and end dates as DateTime
+        # Validate date format
         date_format = "%Y-%m-%d"
         try:
             start_date_obj = datetime.strptime(start_date, date_format)
             end_date_obj = datetime.strptime(end_date, date_format)
         except ValueError:
-            return jsonify({"error": f"Dates must be in the format {date_format}"}), 400
-        
+            return jsonify({"error": "Invalid date format. Use YYYY-MM-DD"}), 400
+
+        # Check logical date order
+        if start_date_obj > end_date_obj:
+            return jsonify({"error": "start_date cannot be later than end_date"}), 400
+
         # Check if user exists in DB
         cur.execute("SELECT * FROM User WHERE Id = %s", (user_id,))
         user = cur.fetchone()
@@ -1975,11 +1952,11 @@ def get_user_appointments(user_id):
                     FROM Appointment a
                     JOIN `Appointment-Users` au ON a.Id = au.AppointmentId
                     JOIN User u ON au.UserId = u.Id
-                    WHERE au.UserId = %s AND a.date >= %s AND a.date <= %s
-                    """, 
+                    WHERE au.UserId = %s AND a.Date >= %s AND a.Date <= %s
+                    """,
                     (user_id, start_date, end_date))
         data = cur.fetchall()
-       
+
         if not data:
             return jsonify([]), 200
 
@@ -1996,8 +1973,8 @@ def get_user_appointments(user_id):
                     'Date': row[1],
                     'Description': row[2]
                 })
-            user_id = row[3]
-            appointments[appointment_id]['participants'][user_id] = {
+            participant_user_id = row[3]
+            appointments[appointment_id]['participants'][participant_user_id] = {
                 'name': row[4],
                 'lastname': row[5]
             }
@@ -2033,4 +2010,3 @@ def get_user_by_string():
 
 if __name__ == '__main__':  # Uitvoeren
     app.run(debug=True)
-

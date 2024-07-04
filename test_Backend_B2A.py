@@ -299,10 +299,11 @@ def test_delete_appointment(client, mocker, db_data, appointment_id, expected_st
 @pytest.mark.parametrize("user_id, request_params, db_data, user_exists, expected_status_code, expected_response", 
     [
         (1, {"start_date": "", "end_date": ""}, None, True, 400, {"error": "start_date and end_date are required"}),  # Missing fields
-        (1, {"start_date": "invalid_date", "end_date": "2023-01-01"}, None, True, 400, {"error": "Dates must be in the format %Y-%m-%d"}),  # Invalid start_date format
+        (1, {"start_date": "invalid_date", "end_date": "2023-01-01"}, None, True, 400, {"error": "Invalid date format. Use YYYY-MM-DD"}),  # Invalid start_date format
+        (1, {"start_date": "2023-01-01", "end_date": "2022-12-31"}, None, True, 400, {"error": "start_date cannot be later than end_date"}),  # Start date later than end date
         (1, {"start_date": "2023-01-01", "end_date": "2023-01-01"}, None, False, 400, {"error": "User not found"}),  # User not found
         (1, {"start_date": "2023-01-01", "end_date": "2023-12-31"}, [], True, 200, []),  # No appointments
-        (1, {"start_date": "2023-01-01", "end_date": "2023-12-31"}, 
+        (1, {"start_date": "2023-01-01", "end_date": "2023-12-31"},
         [(1, "2023-06-15", "Description1", 1, "John", "Doe")], True, 200, {'1': {"Date": "2023-06-15", "Description": "Description1", "participants": {'1': {"name": "John", "lastname": "Doe"}}}})  # Valid response with data
     ]
 )
