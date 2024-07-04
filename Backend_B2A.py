@@ -1883,6 +1883,18 @@ def get_user_appointments(user_id):
         if not start_date or not end_date:
             return jsonify({"error": "start_date and end_date are required"}), 400
 
+        # Validate date format
+        date_format = "%Y-%m-%d"
+        try:
+            start_date_obj = datetime.strptime(start_date, date_format)
+            end_date_obj = datetime.strptime(end_date, date_format)
+        except ValueError:
+            return jsonify({"error": "Invalid date format. Use YYYY-MM-DD"}), 400
+
+        # Check logical date order
+        if start_date_obj > end_date_obj:
+            return jsonify({"error": "start_date cannot be later than end_date"}), 400
+
         # Check if user exists in DB
         cur.execute("SELECT * FROM User WHERE Id = %s", (user_id,))
         user = cur.fetchone()
@@ -1897,7 +1909,7 @@ def get_user_appointments(user_id):
                     FROM Appointment a
                     JOIN `Appointment-Users` au ON a.Id = au.AppointmentId
                     JOIN User u ON au.UserId = u.Id
-                    WHERE au.UserId = %s AND a.date >= %s AND a.date <= %s
+                    WHERE au.UserId = %s AND a.Date >= %s AND a.Date <= %s
                     """,
                     (user_id, start_date, end_date))
         data = cur.fetchall()
@@ -1918,8 +1930,8 @@ def get_user_appointments(user_id):
                     'Date': row[1],
                     'Description': row[2]
                 })
-            user_id = row[3]
-            appointments[appointment_id]['participants'][user_id] = {
+            participant_user_id = row[3]
+            appointments[appointment_id]['participants'][participant_user_id] = {
                 'name': row[4],
                 'lastname': row[5]
             }
