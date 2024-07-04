@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, send_file
+from flask import Flask, jsonify, request, send_file, make_response
 from flask_mysqldb import MySQL
 from flask_cors import CORS
 from fpdf import FPDF
@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from datetime import datetime
 from collections import defaultdict
 import base64
+import io
 from io import BytesIO
 import logging
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired
@@ -14,8 +15,9 @@ import os
 import tempfile
 import json  # Import the json module
 from reportlab.pdfgen import canvas
+import jwt
+from datetime import datetime, timedelta
 import bcrypt
-
 
 load_dotenv()
 
@@ -34,7 +36,6 @@ app.config['MYSQL_USER'] = os.getenv('MYSQL_USER')
 app.config['MYSQL_PASSWORD'] = os.getenv('MYSQL_PASSWORD')
 app.config['MYSQL_DB'] = os.getenv('MYSQL_DB')
 app.config['MYSQL_HOST'] = os.getenv('MYSQL_HOST')
-
 mysql = MySQL(app)
 
 app.config['MAIL_SERVER'] = 'smtp.sendgrid.net'
@@ -81,6 +82,16 @@ def serialize_data(data):
         return data
 
 
+def create_jwt_token(user_id, user_role):
+    # Token expires in 1 hour or when the session ends
+    payload = {
+        'user_id': user_id,
+        'role': user_role,
+        'exp': datetime.utcnow() + timedelta(hours=1)
+    }
+    return jwt.encode(payload, os.getenv("SECRET_KEY"), algorithm='HS256')
+
+
 def hash_password(password):
     # Convert the password to bytes
     password_bytes = password.encode('utf-8')
@@ -95,6 +106,7 @@ def hash_password(password):
     return hashed_password
 
 
+
 @app.route("/login", methods=["POST"])
 def login():
     try:
@@ -102,21 +114,48 @@ def login():
         password = request.json["password"]
         # Hash the incoming password
         cursor = mysql.connection.cursor()
-        # Fetch the user's hashed password from the database
         cursor.execute('''SELECT Role, Id, Password FROM User WHERE Email = %s''', (email,))
         result = cursor.fetchone()
+        cursor.close()
+
         if result is None:
             return "", 400
         else:
             role, user_id, db_hashed_password = result
             # Compare the hashed passwords (assuming bcrypt)
             if bcrypt.checkpw(password.encode('utf-8'), db_hashed_password.encode('utf-8')):
-                return jsonify({"role": role, "user_id": user_id}), 200
+                token = create_jwt_token(user_id, role)
+                response = make_response(jsonify({"role": role, "auth_token": token, "user_id": user_id}), 200)
+                return response
             else:
                 return "", 400
     except Exception as e:
         app.logger.error(f'Error during login: {e}')
         return "", 500
+
+@app.route("/get_account_info", methods=["POST"])
+def get_account_info():
+    try:
+        data = request.json
+        token = data.get('auth_token')
+        if not token:
+            app.logger.error('Token is missing')
+            return jsonify({"error": "Token is missing"}), 401
+        
+        try:
+            payload = jwt.decode(token, os.getenv("SECRET_KEY"), algorithms=['HS256'])
+            user_id = payload['user_id']
+            role = payload['role']
+            return jsonify({"user_id": user_id, "role": role}), 200
+        except jwt.ExpiredSignatureError:
+            app.logger.error('Token has expired')
+            return jsonify({"error": "Token has expired"}), 401
+        except jwt.InvalidTokenError:
+            app.logger.error('Invalid token')
+            return jsonify({"error": "Invalid token"}), 401
+    except Exception as e:
+        app.logger.error(f'Error during token decoding: {e}')
+        return jsonify({"error": "Internal server error"}), 500
 
 def emailCheck(email):
     try:
