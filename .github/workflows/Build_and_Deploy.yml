@@ -20,6 +20,11 @@ jobs:
           echo "${{ secrets.ANSIBLE_SSH_CONVERTED }}" > private_key
           chmod 600 private_key
 
+      - name: Set up SSH key2
+        run: |
+          echo "${{ secrets.ANSIBLE_SSH_CONVERTED2 }}" > private_key2
+          chmod 600 private_key2
+
       # Test the SSH connection to the Ansible controller
       - name: Test SSH connection
         run: |
@@ -51,7 +56,7 @@ jobs:
       # Configure the new VM
       - name: Configure Backend on New VM
         run: |
-          ssh -o StrictHostKeyChecking=accept-new -i ./private_key ${{ secrets.AZURE_USER_ID }}@${{ env.VM_IP }} << 'EOF'
+          ssh -o StrictHostKeyChecking=accept-new -i ./private_key2 ${{ secrets.AZURE_USER_ID }}@${{ env.VM_IP }} << 'EOF'
             sudo apt-get update
             sudo apt-get upgrade -y
             sudo apt-get install -y git python3-pip nano pkg-config libmysqlclient-dev
