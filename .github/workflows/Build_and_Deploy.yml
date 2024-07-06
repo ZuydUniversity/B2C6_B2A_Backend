@@ -35,7 +35,7 @@ jobs:
             # Create the Azure VM
             az vm create --resource-group B2C6A --name backendlasse1 \
               --image "Canonical:0001-com-ubuntu-minimal-jammy:minimal-22_04-lts-gen2:latest" \
-              --admin-username ${AZURE_USER_ID} --assign-identity --generate-ssh-keys \
+              --admin-username ${{ secrets.AZURE_USER_ID }} --assign-identity --generate-ssh-keys \
               --public-ip-sku Standard --location westeurope --size Standard_B1s \
               --storage-sku Standard_LRS --nic-delete-option delete --os-disk-delete-option delete
 
