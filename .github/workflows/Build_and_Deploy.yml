@@ -53,7 +53,7 @@ jobs:
             echo "$vm_ip ansible_user=${{ secrets.AZURE_USER_ID }} ansible_ssh_private_key_file=~/.ssh/id_rsa" >> inventory
             
             # Run the configuration tasks on the new VM
-            ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/id_rsa ${AZURE_USER_ID}@$vm_ip << -'EOI'
+            ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/id_rsa ${AZURE_USER_ID}@$vm_ip << 'EOI'
               # Update apt package index and upgrade all packages
               sudo apt-get update
               sudo apt-get upgrade -y
@@ -69,17 +69,7 @@ jobs:
               # Clone the backend repository
               git clone https://github.com/ZuydUniversity/B2C6_B2A_Backend.git /home/${{ secrets.AZURE_USER_ID }}/B2C6_B2A_Backend
 
-              # Create .env file with required environment variables
-              cat <<EOL > /home/${{ secrets.AZURE_USER_ID }}/B2C6_B2A_Backend/.env
-              MYSQL_USER=${{ secrets.MYSQL_USER }}
-              MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}
-              MYSQL_DB=${{ secrets.MYSQL_DB }}
-              MYSQL_HOST=${{ secrets.MYSQL_HOST }}
-              SECRET_KEY=${{ secrets.SECRET_KEY }}
-              MAIL_PASSWORD=${{ secrets.MAIL_PASSWORD }}
-              imgur_client_id=${{ secrets.IMGUR_CLIENT_ID }}
-              imgur_client_secret=${{ secrets.IMGUR_CLIENT_SECRET }}
-              EOL
+              
 
               # Modify Backend_B2A.py to set host and port
               sed -i "s/app.run(debug=True)/app.run(host='0.0.0.0', port=5000, debug=True)/" /home/${{ secrets.AZURE_USER_ID }}/B2C6_B2A_Backend/Backend_B2A.py
