@@ -1,0 +1,93 @@
+name: Build_and_Deploy
+
+on:
+  push:
+    branches:
+      - Build_and_Deploy
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checkout the code from the repository
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      # Set up the SSH key for connecting to the Ansible controller
+      - name: Set up SSH key
+        run: |
+          echo "${{ secrets.ANSIBLE_SSH_CONVERTED }}" > private_key
+          chmod 600 private_key
+
+      # Test the SSH connection to the Ansible controller
+      - name: Test SSH connection
+        run: |
+          ssh -o StrictHostKeyChecking=accept-new -i ./private_key ${{ secrets.AZURE_USER_ID }}@${{ secrets.Ansible_Controller_IP }} "echo SSH connection successful"
+
+      # Deploy and configure VM on Azure, then configure backend
+      - name: Deploy and configure VM on Azure
+        run: |
+          ssh -o StrictHostKeyChecking=accept-new -i ./private_key ${{ secrets.AZURE_USER_ID }}@${{ secrets.Ansible_Controller_IP }} << 'EOF'
+            # Login to Azure
+            az login --service-principal -u ${{ secrets.CLIENT_ID }} -p ${{ secrets.CLIENT_SECRET }} --tenant ${{ secrets.TENANT_ID }}
+            
+            # Create the Azure VM
+            az vm create --resource-group B2C6A --name backendlasse1 \
+              --image "Canonical:0001-com-ubuntu-minimal-jammy:minimal-22_04-lts-gen2:latest" \
+              --admin-username ${AZURE_USER_ID} --assign-identity --generate-ssh-keys \
+              --public-ip-sku Standard --location westeurope --size Standard_B1s \
+              --storage-sku Standard_LRS --nic-delete-option delete --os-disk-delete-option delete
+
+            # Open port 5000 for the backend service
+            az vm open-port --resource-group B2C6A --name backendlasse1 --port 5000 --priority 1500
+            
+            # Wait for the VM to be ready
+            sleep 120
+            
+            # Get the public IP of the new VM
+            vm_ip=$(az vm list-ip-addresses --resource-group B2C6A --name backendlasse1 --query "[].virtualMachine.network.publicIpAddresses[].ipAddress" -o tsv)
+            
+            # Create inventory file for Ansible
+            echo "[backendlasse1]" > inventory
+            echo "$vm_ip ansible_user=${AZURE_USER_ID} ansible_ssh_private_key_file=~/.ssh/id_rsa" >> inventory
+            
+            # Run the configuration tasks on the new VM
+            ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/id_rsa ${AZURE_USER_ID}@$vm_ip << 'EOI'
+              # Update apt package index and upgrade all packages
+              sudo apt-get update
+              sudo apt-get upgrade -y
+
+              # Install necessary packages
+              sudo apt-get install -y git python3-pip nano pkg-config libmysqlclient-dev
+
+              # Install pip packages
+              sudo pip3 install mysqlclient==2.1.1 Flask==2.2.3 Flask-MySQLdb==1.0.1 Flask-CORS==4.0.1 \
+                fpdf==1.7.2 python-dotenv==1.0.1 pytest==8.2.2 pytest-mock==3.14.0 Flask-Mail==0.10.0 \
+                itsdangerous==2.2.0 imgurpython==1.1.7 reportlab==4.2.2 Werkzeug==2.2.2 bcrypt==4.1.3
+
+              # Clone the backend repository
+              git clone https://github.com/ZuydUniversity/B2C6_B2A_Backend.git /home/${AZURE_USER_ID}/B2C6_B2A_Backend
+
+              # Create .env file with required environment variables
+              cat <<EOL > /home/${AZURE_USER_ID}/B2C6_B2A_Backend/.env
+              MYSQL_USER=${{ secrets.MYSQL_USER }}
+              MYSQL_PASSWORD=${{ secrets.MYSQL_PASSWORD }}
+              MYSQL_DB=${{ secrets.MYSQL_DB }}
+              MYSQL_HOST=${{ secrets.MYSQL_HOST }}
+              SECRET_KEY=${{ secrets.SECRET_KEY }}
+              MAIL_PASSWORD=${{ secrets.MAIL_PASSWORD }}
+              imgur_client_id=${{ secrets.IMGUR_CLIENT_ID }}
+              imgur_client_secret=${{ secrets.IMGUR_CLIENT_SECRET }}
+              EOL
+
+              # Modify Backend_B2A.py to set host and port
+              sed -i "s/app.run(debug=True)/app.run(host='0.0.0.0', port=5000, debug=True)/" /home/${AZURE_USER_ID}/B2C6_B2A_Backend/Backend_B2A.py
+
+              # Add path to ~/.bashrc
+              echo 'export PATH=\$PATH:/home/${AZURE_USER_ID}/.local/bin' >> /home/${AZURE_USER_ID}/.bashrc
+
+              # Source ~/.bashrc
+              source /home/${AZURE_USER_ID}/.bashrc
+            EOI
+          EOF
